@@ -95,3 +95,60 @@ CREATE TABLE consorcio.persona_unidad_funcional(
     CONSTRAINT chk_rol CHECK (rol IN ('propietario', 'inquilino'))
 );
 go
+
+CREATE TABLE consorcio.pago(
+    idPago INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
+    fecha DATE NOT NULL DEFAULT GETDATE(),
+    cuentaOrigen CHAR(22) NOT NULL,
+    importe DECIMAL (12,2) NOT NULL,
+    estaAsociado BIT NOT NULL,
+
+    --solo acepta cuando son 22 caracteres y que sean todos numeros--
+    CONSTRAINT chk_pago_cuentaOrigen CHECK (ISNUMERIC(cuentaOrigen) = 1),
+    CONSTRAINT chk_pago_importe CHECK (importe > 0)
+);
+
+CREATE TABLE consorcio.expensa(
+    idExpensa INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
+    idConsorcio INT NOT NULL, 
+    idPersona INT NOT NULL,
+    idUnidadFuncional INT NOT NULL,
+
+    CONSTRAINT fk_expensa_consorcio FOREIGN KEY (idConsorcio) REFERENCES consorcio.consorcio (idConsorcio),
+    CONSTRAINT fk_expensa_persona FOREIGN KEY (idPersona) REFERENCES consorcio.persona (idPersona),
+    CONSTRAINT fk_expensa_unidadFuncional FOREIGN KEY (idUnidadFuncional) REFERENCES consorcio.unidad_funcional (idUnidadFuncional)
+);
+
+CREATE TABLE consorcio.detalle_expensa (
+    idDetalleExpensa INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
+    idExpensa INT NOT NULL,
+    idUnidadFuncional INT NOT NULL,
+    idPago INT NOT NULL,
+    fechaEmision DATE NOT NULL DEFAULT GETDATE(),
+    fechaPrimerVenc DATE NOT NULL,
+    fechaSegundoVenc DATE,
+    saldoAnterior DECIMAL (12,2) NOT NULL,
+    pagoRecibido DECIMAL (12,2) NOT NULL,
+    deuda DECIMAL (12,2) NOT NULL,
+    interesPorMora DECIMAL (12, 2) NOT NULL,
+    expensasOrdinarias DECIMAL (12, 2) NOT NULL,
+    expensasExtraordinarias DECIMAL (12, 2) NOT NULL,
+    totalAPagar DECIMAL (12, 2) NOT NULL,
+
+    CONSTRAINT fk_detalleExpensa_expensa FOREIGN KEY (idExpensa) REFERENCES consorcio.expensa(idExpensa),
+    CONSTRAINT fk_detalleExpensa_unidadFuncional FOREIGN KEY (idUnidadFuncional) REFERENCES consorcio.unidad_funcional(idUnidadFuncional),
+    CONSTRAINT fk_detalleExpensa_pago FOREIGN KEY (idPago) REFERENCES consorcio.pago(idPago),
+
+    --verifica que la fecha del primer vencimiento sea mayor a la fecha emision--
+    CONSTRAINT chk_detalleExpensa_fechaPrimerVenc CHECK (fechaPrimerVenc > fechaEmision),
+
+    --verifica que la fecha del segundo vencimiento sea NULA (opcional) o, si existe, que sea mayor a la fecha del primer vencimiento.
+    CONSTRAINT chk_detalleExpensa_fechaSegundoVenc CHECK (fechaSegundoVenc IS NULL OR fechaSegundoVenc > fechaPrimerVenc),
+
+    CONSTRAINT chk_detalleExpensa_pagoRecibidos CHECK (pagoRecibido > 0),
+    CONSTRAINT chk_detalleExpensa_deuda CHECK (deuda > 0),
+    CONSTRAINT chk_detalleExpensa_interesPorMora CHECK (interesPorMora > 0),
+    CONSTRAINT chk_detalleExpensa_expensasOrdinarias CHECK (expensasOrdinarias > 0),
+    CONSTRAINT chk_detalleExpensa_expensasExtraOrdinarias CHECK (expensasExtraOrdinarias > 0),
+    CONSTRAINT chk_detalleExpensa_totalAPagar CHECK (totalAPagar >= 0)
+);
