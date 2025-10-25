@@ -3,7 +3,7 @@
 Materia:         Bases de Datos Aplicadas
 Comisión:        Com 01-2900
 Grupo:           G08
-Fecha de Entrega: 25/10/2025
+Fecha de Entrega: 04/11/2025
 Integrantes:
     Bentancur Suarez, Ismael 45823439
     Rodriguez Arrien, Juan Manuel 44259478
@@ -17,9 +17,156 @@ IF NOT EXISTS (SELECT * FROM  sys.schemas WHERE name = 'consorcio')
     EXEC('CREATE SCHEMA consorcio');
 go
 
-DROP TABLE IF EXISTS consorcio.persona;
+DROP TABLE IF EXISTS consorcio.gasto_extra_ordinario;
+DROP TABLE IF EXISTS consorcio.gasto_ordinario;
+DROP TABLE IF EXISTS consorcio.gasto;
+DROP TABLE IF EXISTS consorcio.detalle_expensa;
+DROP TABLE IF EXISTS consorcio.expensa;
+DROP TABLE IF EXISTS consorcio.pago;
 DROP TABLE IF EXISTS consorcio.persona_unidad_funcional;
+DROP TABLE IF EXISTS consorcio.baulera;
+DROP TABLE IF EXISTS consorcio.cochera;
+DROP TABLE IF EXISTS consorcio.unidad_funcional;
+DROP TABLE IF EXISTS consorcio.estado_financiero;
+DROP TABLE IF EXISTS consorcio.persona;
+DROP TABLE IF EXISTS consorcio.consorcio;
 go
+
+CREATE TABLE consorcio.consorcio (
+	idConsorcio INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
+	nombre VARCHAR(20),
+	direccion VARCHAR(20) NOT NULL,
+	cantidadUnidadesFuncionales INT NOT NULL,
+	metrosCuadradosTotales INT NOT NULL,
+
+	CONSTRAINT chk_unidadesFuncionales_min CHECK (cantidadUnidadesFuncionales > 0),
+	CONSTRAINT chk_metrosCuadradosTotales_max CHECK (metrosCuadradosTotales > 0)
+);
+
+CREATE TABLE consorcio.estado_financiero (
+	idEstadoFinanciero INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
+	idConsorcio INT NOT NULL, 
+	saldoAnterior DECIMAL(12,2),
+	ingresosEnTermino DECIMAL(12,2),
+	ingresosAdeudados DECIMAL(12,2),
+	egresos DECIMAL(12,2),
+	saldoCierre DECIMAL(12,2),
+	periodo VARCHAR(12) NOT NULL,
+
+	CONSTRAINT fk_estadoFinanciero_consorcio FOREIGN KEY (idConsorcio) REFERENCES consorcio.consorcio(idConsorcio),
+	CONSTRAINT chk_estadoFinanciero_periodo CHECK (periodo IN('enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'))
+);
+
+CREATE TABLE consorcio.unidad_funcional (
+	idUnidadFuncional INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
+	idConsorcio INT NOT NULL,
+	cuentaOrigen VARCHAR(22) NOT NULL,
+	numeroUnidadFuncional INT NOT NULL,
+	piso INT NOT NULL,
+	coeficiente DECIMAL(5,2) NOT NULL,
+	metrosCuadrados INT NOT NULL,
+
+	CONSTRAINT fk_unidadFuncional_consorcio FOREIGN KEY (idConsorcio) REFERENCES consorcio.consorcio(idConsorcio),
+	CONSTRAINT chk_unidadFuncional_cuentaOrigen CHECK (ISNUMERIC(cuentaOrigen) = 1),
+	CONSTRAINT chk_coeficiente_max CHECK (coeficiente <= 100),
+	CONSTRAINT chk_metrosCuadrados_max CHECK (metrosCuadrados > 0)
+);
+
+CREATE TABLE consorcio.cochera (
+	idCochera INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
+	idUnidadFuncional INT,
+	metrosCuadrados INT NOT NULL,
+	coeficiente DECIMAL(5,2) NOT NULL,
+
+	CONSTRAINT fk_cochera_unidadFuncional FOREIGN KEY (idUnidadFuncional) REFERENCES consorcio.unidad_funcional(idUnidadFuncional),
+	CONSTRAINT chk_cochera_coeficiente_max CHECK (coeficiente <= 100),
+	CONSTRAINT chk_metrosCuadrados_min CHECK (metrosCuadrados > 0)
+);
+
+CREATE TABLE consorcio.baulera (
+	idBaulera INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
+	idUnidadFuncional INT,
+	metrosCuadrados INT NOT NULL,
+	coeficiente DECIMAL(5,2) NOT NULL,
+
+	CONSTRAINT fk_baulera_unidadFuncional FOREIGN KEY (idUnidadFuncional) REFERENCES consorcio.unidad_funcional(idUnidadFuncional),
+	CONSTRAINT chk_baulera_coeficiente_max CHECK (coeficiente <= 100),
+	CONSTRAINT chk_metrosCuadrados_baulera_min CHECK (metrosCuadrados > 0)
+);
+
+CREATE TABLE consorcio.persona (
+    idPersona int identity(1,1) PRIMARY KEY,
+    nombre VARCHAR(50) NOT NULL,
+    apellido VARCHAR(50) NOT NULL,
+    dni int NOT NULL UNIQUE,
+    email VARCHAR(100) NULL,
+    telefono VARCHAR(20) NULL,
+    cuentaOrigen CHAR(22) NOT NULL,
+
+    CONSTRAINT chk_persona_cuentaOrigen CHECK (ISNUMERIC(cuentaOrigen) = 1)
+);
+
+CREATE TABLE consorcio.persona_unidad_funcional(
+    idPersona int NOT NULL,
+    idUnidadFuncional int NOT NULL,
+    rol VARCHAR(15) NOT NULL,
+
+    CONSTRAINT pk_personaUnidadFuncional PRIMARY KEY (idPersona, idUnidadFuncional, rol),
+    CONSTRAINT fk_idPersona FOREIGN KEY (idPersona) REFERENCES consorcio.persona (idPersona),
+    CONSTRAINT fk_idUnidadFuncional FOREIGN KEY (idUnidadFuncional) REFERENCES consorcio.unidad_funcional (idUnidadFuncional),
+    CONSTRAINT chk_rol CHECK (rol IN ('propietario', 'inquilino'))
+);
+
+CREATE TABLE consorcio.pago(
+    idPago INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
+    fecha DATE NOT NULL DEFAULT GETDATE(),
+    cuentaOrigen CHAR(22) NOT NULL,
+    importe DECIMAL (12,2) NOT NULL,
+    estaAsociado BIT NOT NULL,
+
+    CONSTRAINT chk_pago_cuentaOrigen CHECK (ISNUMERIC(cuentaOrigen) = 1),
+    CONSTRAINT chk_pago_importe CHECK (importe > 0)
+);
+
+CREATE TABLE consorcio.expensa(
+    idExpensa INT IDENTITY (1,1) PRIMARY KEY,
+    idConsorcio INT NOT NULL, 
+    idPersona INT NOT NULL,
+    idUnidadFuncional INT NOT NULL,
+
+    CONSTRAINT fk_expensa_consorcio FOREIGN KEY (idConsorcio) REFERENCES consorcio.consorcio (idConsorcio),
+    CONSTRAINT fk_expensa_persona FOREIGN KEY (idPersona) REFERENCES consorcio.persona (idPersona),
+    CONSTRAINT fk_expensa_unidadFuncional FOREIGN KEY (idUnidadFuncional) REFERENCES consorcio.unidad_funcional (idUnidadFuncional)
+);
+
+CREATE TABLE consorcio.detalle_expensa (
+    idDetalleExpensa INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
+    idExpensa INT NOT NULL,
+    idUnidadFuncional INT NOT NULL,
+    idPago INT NOT NULL,
+    fechaEmision DATE NOT NULL DEFAULT GETDATE(),
+    fechaPrimerVenc DATE NOT NULL,
+    fechaSegundoVenc DATE,
+    saldoAnterior DECIMAL (12,2) NOT NULL,
+    pagoRecibido DECIMAL (12,2) NOT NULL,
+    deuda DECIMAL (12,2) NOT NULL,
+    interesPorMora DECIMAL (12, 2) NOT NULL,
+    expensasOrdinarias DECIMAL (12, 2) NOT NULL,
+    expensasExtraordinarias DECIMAL (12, 2) NOT NULL,
+    totalAPagar DECIMAL (12, 2) NOT NULL,
+
+    CONSTRAINT fk_detalleExpensa_expensa FOREIGN KEY (idExpensa) REFERENCES consorcio.expensa(idExpensa),
+    CONSTRAINT fk_detalleExpensa_unidadFuncional FOREIGN KEY (idUnidadFuncional) REFERENCES consorcio.unidad_funcional(idUnidadFuncional),
+    CONSTRAINT fk_detalleExpensa_pago FOREIGN KEY (idPago) REFERENCES consorcio.pago(idPago),
+    CONSTRAINT chk_detalleExpensa_fechaPrimerVenc CHECK (fechaPrimerVenc > fechaEmision),
+    CONSTRAINT chk_detalleExpensa_fechaSegundoVenc CHECK (fechaSegundoVenc IS NULL OR fechaSegundoVenc > fechaPrimerVenc),
+    CONSTRAINT chk_detalleExpensa_pagoRecibidos CHECK (pagoRecibido > 0),
+    CONSTRAINT chk_detalleExpensa_deuda CHECK (deuda > 0),
+    CONSTRAINT chk_detalleExpensa_interesPorMora CHECK (interesPorMora > 0),
+    CONSTRAINT chk_detalleExpensa_expensasOrdinarias CHECK (expensasOrdinarias > 0),
+    CONSTRAINT chk_detalleExpensa_expensasExtraOrdinarias CHECK (expensasExtraOrdinarias > 0),
+    CONSTRAINT chk_detalleExpensa_totalAPagar CHECK (totalAPagar >= 0)
+);
 
 CREATE TABLE consorcio.gasto (
     idGasto INT IDENTITY(1,1),
@@ -70,85 +217,4 @@ CREATE TABLE consorcio.gasto_extra_ordinario (
     CONSTRAINT chk_cuotas_validas CHECK (nroCuota <= totalCuotas),
     CONSTRAINT uq_factura_extra_ord UNIQUE (nroFactura, nomEmpresa),
     CONSTRAINT fk_gastoExtraOrd_gasto FOREIGN KEY (idGasto) REFERENCES consorcio.gasto(idGasto)
-);
-
-CREATE TABLE consorcio.persona (
-    idPersona int identity(1,1) PRIMARY KEY,
-    nombre VARCHAR(50) NOT NULL,
-    apellido VARCHAR(50) NOT NULL,
-    dni int NOT NULL UNIQUE,
-    email VARCHAR(100) NULL,
-    telefono VARCHAR(20) NULL,
-    cuentaOrigen CHAR(22) NOT NULL,
-
-    CONSTRAINT chk_pago_cuentaOrigen CHECK (ISNUMERIC(cuentaOrigen) = 1)
-);
-
-CREATE TABLE consorcio.persona_unidad_funcional(
-    idPersona int NOT NULL,
-    idUnidadFuncional int NOT NULL,
-    rol VARCHAR(15) NOT NULL,
-
-    CONSTRAINT pk_personaUnidadFuncional PRIMARY KEY (idPersona, idUnidadFuncional, rol),
-    CONSTRAINT fk_idPersona FOREIGN KEY (idPersona) REFERENCES consorcio.persona (idPersona),
-    CONSTRAINT fk_idUnidadFuncional FOREIGN KEY (idUnidadFuncional) REFERENCES consorcio.unidad_funcional (idUnidadFuncional),
-    CONSTRAINT chk_rol CHECK (rol IN ('propietario', 'inquilino'))
-);
-go
-
-CREATE TABLE consorcio.pago(
-    idPago INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
-    fecha DATE NOT NULL DEFAULT GETDATE(),
-    cuentaOrigen CHAR(22) NOT NULL,
-    importe DECIMAL (12,2) NOT NULL,
-    estaAsociado BIT NOT NULL,
-
-    --solo acepta cuando son 22 caracteres y que sean todos numeros--
-    CONSTRAINT chk_pago_cuentaOrigen CHECK (ISNUMERIC(cuentaOrigen) = 1),
-    CONSTRAINT chk_pago_importe CHECK (importe > 0)
-);
-
-CREATE TABLE consorcio.expensa(
-    idExpensa INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
-    idConsorcio INT NOT NULL, 
-    idPersona INT NOT NULL,
-    idUnidadFuncional INT NOT NULL,
-
-    CONSTRAINT fk_expensa_consorcio FOREIGN KEY (idConsorcio) REFERENCES consorcio.consorcio (idConsorcio),
-    CONSTRAINT fk_expensa_persona FOREIGN KEY (idPersona) REFERENCES consorcio.persona (idPersona),
-    CONSTRAINT fk_expensa_unidadFuncional FOREIGN KEY (idUnidadFuncional) REFERENCES consorcio.unidad_funcional (idUnidadFuncional)
-);
-
-CREATE TABLE consorcio.detalle_expensa (
-    idDetalleExpensa INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
-    idExpensa INT NOT NULL,
-    idUnidadFuncional INT NOT NULL,
-    idPago INT NOT NULL,
-    fechaEmision DATE NOT NULL DEFAULT GETDATE(),
-    fechaPrimerVenc DATE NOT NULL,
-    fechaSegundoVenc DATE,
-    saldoAnterior DECIMAL (12,2) NOT NULL,
-    pagoRecibido DECIMAL (12,2) NOT NULL,
-    deuda DECIMAL (12,2) NOT NULL,
-    interesPorMora DECIMAL (12, 2) NOT NULL,
-    expensasOrdinarias DECIMAL (12, 2) NOT NULL,
-    expensasExtraordinarias DECIMAL (12, 2) NOT NULL,
-    totalAPagar DECIMAL (12, 2) NOT NULL,
-
-    CONSTRAINT fk_detalleExpensa_expensa FOREIGN KEY (idExpensa) REFERENCES consorcio.expensa(idExpensa),
-    CONSTRAINT fk_detalleExpensa_unidadFuncional FOREIGN KEY (idUnidadFuncional) REFERENCES consorcio.unidad_funcional(idUnidadFuncional),
-    CONSTRAINT fk_detalleExpensa_pago FOREIGN KEY (idPago) REFERENCES consorcio.pago(idPago),
-
-    --verifica que la fecha del primer vencimiento sea mayor a la fecha emision--
-    CONSTRAINT chk_detalleExpensa_fechaPrimerVenc CHECK (fechaPrimerVenc > fechaEmision),
-
-    --verifica que la fecha del segundo vencimiento sea NULA (opcional) o, si existe, que sea mayor a la fecha del primer vencimiento.
-    CONSTRAINT chk_detalleExpensa_fechaSegundoVenc CHECK (fechaSegundoVenc IS NULL OR fechaSegundoVenc > fechaPrimerVenc),
-
-    CONSTRAINT chk_detalleExpensa_pagoRecibidos CHECK (pagoRecibido > 0),
-    CONSTRAINT chk_detalleExpensa_deuda CHECK (deuda > 0),
-    CONSTRAINT chk_detalleExpensa_interesPorMora CHECK (interesPorMora > 0),
-    CONSTRAINT chk_detalleExpensa_expensasOrdinarias CHECK (expensasOrdinarias > 0),
-    CONSTRAINT chk_detalleExpensa_expensasExtraOrdinarias CHECK (expensasExtraOrdinarias > 0),
-    CONSTRAINT chk_detalleExpensa_totalAPagar CHECK (totalAPagar >= 0)
 );
