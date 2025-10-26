@@ -102,7 +102,7 @@ CREATE TABLE consorcio.persona (
     email VARCHAR(100) NULL,
     telefono VARCHAR(20) NULL,
     cuentaOrigen CHAR(22) NOT NULL,
-    fechaBaja DATE NULL DEFAULT NULL,g
+    fechaBaja DATE NULL DEFAULT NULL,
 
     CONSTRAINT chk_persona_cuentaOrigen CHECK (ISNUMERIC(cuentaOrigen) = 1)
 );
