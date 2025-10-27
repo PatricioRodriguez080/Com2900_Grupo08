@@ -24,7 +24,7 @@ EXEC sp_MSset_oledb_prop N'Microsoft.ACE.OLEDB.12.0', N'DynamicParameters', 1;
 GO
 
 
-CREATE OR ALTER PROCEDURE consorcio.importar_consorcios_excel
+CREATE OR ALTER PROCEDURE consorcio.SP_importar_consorcios_excel
     @ruta_archivo NVARCHAR(255)
 AS
 BEGIN
