@@ -101,7 +101,7 @@ END;
 GO
 
 -- Ejemplo de ejecución:
-EXEC consorcio.importar_consorcios_excel 
-    @ruta_archivo = N'C:\Users\patri\Descargas\datos varios.xlsx';
+EXEC consorcio.SP_importar_consorcios_excel 
+    @ruta_archivo = 'C:\Archivos para el TP\datos varios.xlsx';
 
 SELECT * FROM consorcio.consorcio;
