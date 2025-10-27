@@ -102,6 +102,7 @@ CREATE TABLE consorcio.persona (
     email VARCHAR(100) NULL,
     telefono VARCHAR(20) NULL,
     cuentaOrigen CHAR(22) NOT NULL,
+    fechaBaja DATE NULL DEFAULT NULL,
 
     CONSTRAINT chk_persona_cuentaOrigen CHECK (ISNUMERIC(cuentaOrigen) = 1)
 );
@@ -218,3 +219,4 @@ CREATE TABLE consorcio.gasto_extra_ordinario (
     CONSTRAINT uq_factura_extra_ord UNIQUE (nroFactura, nomEmpresa),
     CONSTRAINT fk_gastoExtraOrd_gasto FOREIGN KEY (idGasto) REFERENCES consorcio.gasto(idGasto)
 );
+
