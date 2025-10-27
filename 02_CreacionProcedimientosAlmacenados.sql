@@ -25,15 +25,12 @@ GO
 
 
 CREATE OR ALTER PROCEDURE consorcio.importar_consorcios_excel
+    @ruta_archivo NVARCHAR(255)
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- 1. DECLARACIÓN Y ASIGNACIÓN DE LA RUTA LOCALMENTE
-    -- Ya que quieres usar una ruta fija, se usa una variable local para evitar el error de sintaxis.
-    DECLARE @ruta_archivo NVARCHAR(255) = 'C:\Archivos-para-el-TP\Archivos para el TP\datos varios.xlsx';
-    
-    -- 2. Crear tabla temporal (AÑADIENDO nro_consorcio_excel)
+    -- 1. Crear tabla temporal (AÑADIENDO nro_consorcio_excel)
     IF OBJECT_ID('consorcio.consorcio_temp', 'U') IS NOT NULL
         DROP TABLE consorcio.consorcio_temp;
 
@@ -49,7 +46,7 @@ BEGIN
     DECLARE @sql NVARCHAR(MAX);
 
     -------------------------------------------------------------------------
-    -- 3. INSERTAR EN LA TABLA TEMPORAL (SQL Dinámico)
+    -- 2. INSERTAR EN LA TABLA TEMPORAL (SQL Dinámico)
     -------------------------------------------------------------------------
     SET @sql = N'
     INSERT INTO consorcio.consorcio_temp (
@@ -80,9 +77,8 @@ BEGIN
     EXEC sp_executesql @sql;
 
     -------------------------------------------------------------------------
-    -- 4. INSERTAR EN LA TABLA FINAL (Lectura de la tabla temporal)
+    -- 3. INSERTAR EN LA TABLA FINAL (Lectura de la tabla temporal)
     -------------------------------------------------------------------------
-    -- Se lee de la tabla temporal, NO se re-ejecuta OPENROWSET.
     INSERT INTO consorcio.consorcio (
         idConsorcio, nombre, direccion, cantidadUnidadesFuncionales, metrosCuadradosTotales
     )
@@ -104,6 +100,8 @@ BEGIN
 END;
 GO
 
-EXEC consorcio.importar_consorcios_excel;
+-- Ejemplo de ejecución:
+EXEC consorcio.importar_consorcios_excel 
+    @ruta_archivo = N'C:\Users\patri\Descargas\datos varios.xlsx';
 
 SELECT * FROM consorcio.consorcio;
