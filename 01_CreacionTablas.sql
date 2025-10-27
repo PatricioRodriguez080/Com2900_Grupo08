@@ -33,7 +33,7 @@ DROP TABLE IF EXISTS consorcio.consorcio;
 go
 
 CREATE TABLE consorcio.consorcio (
-	idConsorcio INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
+	idConsorcio INT PRIMARY KEY NOT NULL,
 	nombre VARCHAR(20),
 	direccion VARCHAR(20) NOT NULL,
 	cantidadUnidadesFuncionales INT NOT NULL,
