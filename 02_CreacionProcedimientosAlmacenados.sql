@@ -13,6 +13,7 @@ Enunciado:       "02 - Creación de Procedimientos Almacenados"
 -----------------------------------------------------------------
 */
 
+------------ Archivo datos varios.xlsx --------------------------
 -- Enable Ad Hoc Distributed Queries
 EXEC sp_configure 'show advanced options', 1; RECONFIGURE;
 EXEC sp_configure 'Ad Hoc Distributed Queries', 1; RECONFIGURE;
@@ -107,3 +108,162 @@ GO
 EXEC consorcio.importar_consorcios_excel;
 
 SELECT * FROM consorcio.consorcio;
+
+------- Archivo inquilino-propietarios-datos.csv -----------------
+-- La ruta debe ser ABSOLUTA y ACCESIBLE por el servicio de SQL Server, por eso elegimos alojar los docs en la raíz del disco C
+
+IF OBJECT_ID('consorcio.ImportarPersonas') IS NOT NULL
+    DROP PROCEDURE consorcio.ImportarPersonas;
+GO
+
+CREATE PROCEDURE consorcio.ImportarPersonas
+    @path NVARCHAR(255) -- Parámetro para la ruta del archivo CSV
+AS
+BEGIN
+    -- Se declara una sola variable para la ejecución completa
+    DECLARE @sqlQuery NVARCHAR(MAX); 
+
+    BEGIN TRY
+        
+        -- Combinar la creación de la tabla, el BULK INSERT y el INSERT final en una sola cadena
+        SET @sqlQuery = '
+            -- 1. CREAR TABLA TEMPORAL
+            IF OBJECT_ID(''tempdb..#temporal'') IS NOT NULL
+                DROP TABLE #temporal;
+            
+            CREATE TABLE #temporal (
+                Col1_Nombre         VARCHAR(100),
+                Col2_Apellido       VARCHAR(100),
+                Col3_DNI            VARCHAR(50),
+                Col4_Email          VARCHAR(100),
+                Col5_Telefono       VARCHAR(50),
+                Col6_CuentaOrigen   CHAR(22),
+                Col7_Inquilino      VARCHAR(10)
+            );
+            
+            -- 2. BULK INSERT (Carga de datos)
+            BULK INSERT #temporal
+            FROM ''' + @path + ''' 
+            WITH (
+                FIELDTERMINATOR = '';'', -- Delimitador correcto
+                ROWTERMINATOR = ''0x0A'',
+                FIRSTROW = 2, -- Omitir encabezado
+                CODEPAGE = ''65001'' 
+            );
+
+            -- 3. INSERTAR EN LA TABLA FINAL consorcio.persona
+            INSERT INTO consorcio.persona (
+                nombre,
+                apellido,
+                dni,
+                email,
+                telefono,
+                cuentaOrigen
+            )
+            SELECT
+                LTRIM(RTRIM(Col1_Nombre)) AS nombre,
+                LTRIM(RTRIM(Col2_Apellido)) AS apellido,
+                CAST(LTRIM(RTRIM(Col3_DNI)) AS INT) AS dni, 
+                LTRIM(RTRIM(Col4_Email)) AS email,
+                LTRIM(RTRIM(Col5_Telefono)) AS telefono,
+                LTRIM(RTRIM(Col6_CuentaOrigen)) AS cuentaOrigen
+            FROM #temporal; -- ¡Ahora en el mismo ámbito de ejecución!
+
+            -- 4. LIMPIEZA
+            IF OBJECT_ID(''tempdb..#temporal'') IS NOT NULL
+                DROP TABLE #temporal;
+        ';
+
+        -- Ejecutar todo el proceso en una sola llamada
+        EXEC sp_executesql @sqlQuery; 
+
+        SELECT 'Importación de datos de persona completada con éxito.' AS Resultado;
+
+    END TRY
+    BEGIN CATCH
+        -- Manejo de errores
+        SELECT
+            'Error al importar los datos. La tabla temporal fue limpiada.' AS Resultado,
+            ERROR_NUMBER() AS ErrorNumber,
+            ERROR_MESSAGE() AS ErrorMessage,
+            ERROR_LINE() AS ErrorLine;
+            
+        -- Limpieza de emergencia, en caso de que la tabla haya llegado a existir
+        SET @sqlQuery = 'IF OBJECT_ID(''tempdb..#temporal'') IS NOT NULL DROP TABLE #temporal;';
+        EXEC sp_executesql @sqlQuery;
+            
+        THROW; 
+        RETURN 1;
+    END CATCH
+    
+    RETURN 0; 
+END
+GO
+
+EXEC consorcio.ImportarPersonas 
+    @path = 'C:\Archivos-para-el-TP\Archivos para el TP\Inquilino-propietarios-datos.csv';
+
+SELECT * FROM consorcio.persona
+
+
+---------- pagos_consorcios.csv ------------
+
+CREATE OR ALTER PROCEDURE consorcio.sp_cargaPagos
+    @path NVARCHAR(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    CREATE TABLE #pago_staging (
+        stg_idPago      NVARCHAR(50),
+        stg_fecha       NVARCHAR(50),
+        stg_cvu_cbu     NVARCHAR(50),
+        stg_valor       NVARCHAR(50)
+    );
+
+    DECLARE @BulkSqlCmd NVARCHAR(MAX);
+
+    SET @BulkSqlCmd = N'
+        BULK INSERT #pago_staging
+        FROM ''' + @path + '''
+        WITH
+        (
+            FIELDTERMINATOR = '','',
+            ROWTERMINATOR = ''\n'',
+            CODEPAGE = ''ACP'',
+            FIRSTROW = 2
+        );
+    ';
+
+    EXEC sp_executesql @BulkSqlCmd;
+
+    INSERT INTO consorcio.pago (
+        idPago,
+        fecha,
+        cuentaOrigen,
+        importe,
+        estaAsociado
+    )
+    SELECT
+        CAST(TRIM(stg_idPago) AS INT),
+        CONVERT(DATE, stg_fecha, 103),
+        CAST(TRIM(stg_cvu_cbu) AS CHAR(22)),
+        CAST(
+            REPLACE(TRIM(stg_valor), '$', '')
+            AS DECIMAL(12,3)
+        ),
+        0
+    FROM
+        #pago_staging
+    WHERE
+        stg_idPago IS NOT NULL
+        AND ISNUMERIC(REPLACE(TRIM(stg_valor), '$', '')) = 1;
+
+    DROP TABLE #pago_staging;
+END
+GO
+
+EXEC consorcio.sp_cargaPagos @path = 'C:\Archivos-para-el-TP\Archivos para el TP\pagos_consorcios.csv';
+
+SELECT * FROM consorcio.pago
+
