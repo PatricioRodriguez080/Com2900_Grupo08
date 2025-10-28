@@ -13,6 +13,7 @@ Enunciado:       "01 - Creación de Tablas"
 -----------------------------------------------------------------
 */
 
+
 IF NOT EXISTS (SELECT * FROM  sys.schemas WHERE name = 'consorcio')
     EXEC('CREATE SCHEMA consorcio');
 go
@@ -112,7 +113,7 @@ CREATE TABLE consorcio.persona_unidad_funcional(
     idUnidadFuncional int NOT NULL,
     rol VARCHAR(15) NOT NULL,
 
-    CONSTRAINT pk_personaUnidadFuncional PRIMARY KEY (idPersona, idUnidadFuncional, rol),
+    CONSTRAINT pk_personaUnidadFuncional PRIMARY KEY (idUnidadFuncional, rol),
     CONSTRAINT fk_idPersona FOREIGN KEY (idPersona) REFERENCES consorcio.persona (idPersona),
     CONSTRAINT fk_idUnidadFuncional FOREIGN KEY (idUnidadFuncional) REFERENCES consorcio.unidad_funcional (idUnidadFuncional),
     CONSTRAINT chk_rol CHECK (rol IN ('propietario', 'inquilino'))
