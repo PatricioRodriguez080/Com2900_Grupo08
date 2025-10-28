@@ -119,10 +119,10 @@ CREATE TABLE consorcio.persona_unidad_funcional(
 );
 
 CREATE TABLE consorcio.pago(
-    idPago INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
-    fecha DATE NOT NULL DEFAULT GETDATE(),
+    idPago INT PRIMARY KEY NOT NULL,
+    fecha DATE,
     cuentaOrigen CHAR(22) NOT NULL,
-    importe DECIMAL (12,2) NOT NULL,
+    importe DECIMAL (13,3) NOT NULL,
     estaAsociado BIT NOT NULL,
 
     CONSTRAINT chk_pago_cuentaOrigen CHECK (ISNUMERIC(cuentaOrigen) = 1),
