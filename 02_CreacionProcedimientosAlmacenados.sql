@@ -265,3 +265,84 @@ EXEC consorcio.sp_cargaPagos @path = 'C:\Archivos-para-el-TP\Archivos para el TP
 
 SELECT * FROM consorcio.pago
 
+---------- UF por consorcio.txt ------------
+
+CREATE OR ALTER PROCEDURE consorcio.SP_CargarUnidadesDesdeArchivo
+    @path NVARCHAR(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- 1?? Crear tabla temporal
+    IF OBJECT_ID('tempdb..#UnidadFuncionalTemp') IS NOT NULL
+        DROP TABLE #UnidadFuncionalTemp;
+
+    CREATE TABLE #UnidadFuncionalTemp (
+        NombreConsorcio NVARCHAR(100),
+        nroUnidadFuncional INT,
+        Piso NVARCHAR(10),
+        Departamento NVARCHAR(10),
+        Coeficiente DECIMAL(5,2),
+        m2_unidad_funcional INT,
+        Bauleras NVARCHAR(3),
+        Cochera NVARCHAR(3),
+        m2_baulera INT,
+        m2_cochera INT
+    );
+
+    -- 2?? Importar archivo con SQL dinámico (tabulado)
+    DECLARE @sql NVARCHAR(MAX);
+    SET @sql = N'
+        BULK INSERT #UnidadFuncionalTemp
+        FROM ''' + @path + '''
+        WITH
+        (
+            FIELDTERMINATOR = ''\t'',
+            ROWTERMINATOR = ''\n'',
+            FIRSTROW = 2
+        );';
+
+    BEGIN TRY
+        EXEC(@sql);
+    END TRY
+    BEGIN CATCH
+        RAISERROR(''Error al importar el archivo. Verifique la ruta y el formato.'', 16, 1);
+        RETURN;
+    END CATCH;
+
+    -- 3?? Insertar en unidad_funcional
+    INSERT INTO consorcio.unidad_funcional
+    (
+        idConsorcio,
+        cuentaOrigen,
+        numeroUnidadFuncional,
+        piso,
+        coeficiente,
+        metrosCuadrados
+    )
+    SELECT
+        c.idConsorcio,
+        CAST(t.nroUnidadFuncional AS VARCHAR(22)),
+        t.nroUnidadFuncional,
+        CASE 
+            WHEN UPPER(LTRIM(RTRIM(t.Piso))) = 'PB' THEN 0
+            WHEN ISNUMERIC(t.Piso) = 1 THEN CAST(t.Piso AS INT)
+            ELSE 0
+        END,
+        t.Coeficiente,
+        t.m2_unidad_funcional
+    FROM #UnidadFuncionalTemp t
+    INNER JOIN consorcio.consorcio c
+        ON LTRIM(RTRIM(c.nombre)) = LTRIM(RTRIM(t.NombreConsorcio));
+
+    -- 4?? Insertar en baulera
+    INSERT INTO consorcio.baulera (idUnidadFuncional, metrosCuadrados, coeficiente)
+    SELECT uf.idUnidadFuncional, t.m2_baulera, t.Coeficiente
+    FROM #UnidadFuncionalTemp t
+    INNER
+
+
+
+
+EXEC consorcio.SP_CargarUnidadesDesdeArchivo @path = 'C:\Archivos para el TP\UF por consorcio.txt';
+SELECT * FROM consorcio.unidad_funcional;
