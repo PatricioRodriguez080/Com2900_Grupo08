@@ -101,12 +101,6 @@ BEGIN
 END;
 GO
 
--- Ejemplo de ejecución:
-EXEC consorcio.SP_importar_consorcios_excel 
-    @ruta_archivo = 'C:\Archivos para el TP\datos varios.xlsx';
-
-SELECT * FROM consorcio.consorcio;
-
 ------- Archivo inquilino-propietarios-datos.csv -----------------
 -- La ruta debe ser ABSOLUTA y ACCESIBLE por el servicio de SQL Server, por eso elegimos alojar los docs en la raíz del disco C
 
@@ -198,11 +192,6 @@ BEGIN
 END
 GO
 
-EXEC consorcio.ImportarPersonas 
-    @path = 'C:\Archivos-para-el-TP\Archivos para el TP\Inquilino-propietarios-datos.csv';
-
-SELECT * FROM consorcio.persona
-
 
 ---------- pagos_consorcios.csv ------------
 
@@ -260,8 +249,3 @@ BEGIN
     DROP TABLE #pago_staging;
 END
 GO
-
-EXEC consorcio.sp_cargaPagos @path = 'C:\Archivos-para-el-TP\Archivos para el TP\pagos_consorcios.csv';
-
-SELECT * FROM consorcio.pago
-
