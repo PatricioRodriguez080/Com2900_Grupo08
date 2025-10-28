@@ -220,4 +220,3 @@ CREATE TABLE consorcio.gasto_extra_ordinario (
     CONSTRAINT uq_factura_extra_ord UNIQUE (nroFactura, nomEmpresa),
     CONSTRAINT fk_gastoExtraOrd_gasto FOREIGN KEY (idGasto) REFERENCES consorcio.gasto(idGasto)
 );
-

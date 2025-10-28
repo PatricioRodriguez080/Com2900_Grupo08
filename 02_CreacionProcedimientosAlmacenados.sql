@@ -26,7 +26,7 @@ GO
 
 
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_consorcios_excel
-    @ruta_archivo NVARCHAR(255)
+    @path NVARCHAR(255)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -61,7 +61,7 @@ BEGIN
         TRY_CAST([m2 totales] AS INT) AS m2_totales
     FROM OPENROWSET(
         ''Microsoft.ACE.OLEDB.12.0'',
-        ''Excel 12.0;Database=' + @ruta_archivo + ';HDR=YES;IMEX=1;'',
+        ''Excel 12.0;Database=' + @path + ';HDR=YES;IMEX=1;'',
         ''SELECT * FROM [Consorcios$]'' 
     ) AS t
     WHERE 
@@ -100,12 +100,6 @@ BEGIN
 
 END;
 GO
-
--- Ejemplo de ejecución:
-EXEC consorcio.SP_importar_consorcios_excel 
-    @ruta_archivo = 'C:\Archivos para el TP\datos varios.xlsx';
-
-SELECT * FROM consorcio.consorcio;
 
 ------- Archivo inquilino-propietarios-datos.csv -----------------
 -- La ruta debe ser ABSOLUTA y ACCESIBLE por el servicio de SQL Server, por eso elegimos alojar los docs en la raíz del disco C
@@ -198,11 +192,6 @@ BEGIN
 END
 GO
 
-EXEC consorcio.ImportarPersonas 
-    @path = 'C:\Archivos-para-el-TP\Archivos para el TP\Inquilino-propietarios-datos.csv';
-
-SELECT * FROM consorcio.persona
-
 
 ---------- pagos_consorcios.csv ------------
 
@@ -260,8 +249,3 @@ BEGIN
     DROP TABLE #pago_staging;
 END
 GO
-
-EXEC consorcio.sp_cargaPagos @path = 'C:\Archivos-para-el-TP\Archivos para el TP\pagos_consorcios.csv';
-
-SELECT * FROM consorcio.pago
-
