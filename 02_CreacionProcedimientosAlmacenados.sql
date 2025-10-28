@@ -26,7 +26,7 @@ GO
 
 
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_consorcios_excel
-    @ruta_archivo NVARCHAR(255)
+    @path NVARCHAR(255)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -61,7 +61,7 @@ BEGIN
         TRY_CAST([m2 totales] AS INT) AS m2_totales
     FROM OPENROWSET(
         ''Microsoft.ACE.OLEDB.12.0'',
-        ''Excel 12.0;Database=' + @ruta_archivo + ';HDR=YES;IMEX=1;'',
+        ''Excel 12.0;Database=' + @path + ';HDR=YES;IMEX=1;'',
         ''SELECT * FROM [Consorcios$]'' 
     ) AS t
     WHERE 
