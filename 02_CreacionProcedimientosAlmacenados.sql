@@ -265,6 +265,8 @@ EXEC consorcio.sp_cargaPagos @path = 'C:\Archivos-para-el-TP\Archivos para el TP
 
 SELECT * FROM consorcio.pago
 
+
+
 ---------- UF por consorcio.txt ------------
 
 CREATE OR ALTER PROCEDURE consorcio.SP_CargarUnidadesDesdeArchivo
@@ -306,7 +308,7 @@ BEGIN
         EXEC(@sql);
     END TRY
     BEGIN CATCH
-        RAISERROR(''Error al importar el archivo. Verifique la ruta y el formato.'', 16, 1);
+        RAISERROR('Error al importar el archivo. Verifique la ruta y el formato.', 16, 1);
         RETURN;
     END CATCH;
 
@@ -339,10 +341,51 @@ BEGIN
     INSERT INTO consorcio.baulera (idUnidadFuncional, metrosCuadrados, coeficiente)
     SELECT uf.idUnidadFuncional, t.m2_baulera, t.Coeficiente
     FROM #UnidadFuncionalTemp t
-    INNER
+    INNER JOIN consorcio.unidad_funcional uf
+        ON uf.idConsorcio = (SELECT idConsorcio FROM consorcio.consorcio WHERE LTRIM(RTRIM(nombre)) = LTRIM(RTRIM(t.NombreConsorcio)))
+       AND uf.numeroUnidadFuncional = t.nroUnidadFuncional
+    WHERE t.Bauleras = 'SI' AND t.m2_baulera > 0;
 
+    -- 5?? Insertar en cochera
+    INSERT INTO consorcio.cochera (idUnidadFuncional, metrosCuadrados, coeficiente)
+    SELECT uf.idUnidadFuncional, t.m2_cochera, t.Coeficiente
+    FROM #UnidadFuncionalTemp t
+    INNER JOIN consorcio.unidad_funcional uf
+        ON uf.idConsorcio = (SELECT idConsorcio FROM consorcio.consorcio WHERE LTRIM(RTRIM(nombre)) = LTRIM(RTRIM(t.NombreConsorcio)))
+       AND uf.numeroUnidadFuncional = t.nroUnidadFuncional
+    WHERE t.Cochera = 'SI' AND t.m2_cochera > 0;
+
+    PRINT 'Importación completada correctamente.';
+END;
+GO
 
 
 
 EXEC consorcio.SP_CargarUnidadesDesdeArchivo @path = 'C:\Archivos para el TP\UF por consorcio.txt';
 SELECT * FROM consorcio.unidad_funcional;
+
+
+
+--Prueba para ver los datos (FUNCIONA)
+CREATE TABLE #UF (
+    NombreConsorcio NVARCHAR(100),
+    nroUnidadFuncional NVARCHAR(10),
+    Piso NVARCHAR(10),
+    Departamento NVARCHAR(10),
+    Coeficiente NVARCHAR(10),
+    m2_unidad_funcional NVARCHAR(10),
+    Bauleras NVARCHAR(3),
+    Cochera NVARCHAR(3),
+    m2_baulera NVARCHAR(10),
+    m2_cochera NVARCHAR(10)
+);
+
+BULK INSERT #UF
+FROM 'C:\Archivos para el TP\UF por consorcio.txt'
+WITH (
+    FIELDTERMINATOR = '\t',  -- TAB
+    ROWTERMINATOR = '\n',
+    FIRSTROW = 2
+);
+
+SELECT * FROM #UF;
