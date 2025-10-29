@@ -287,23 +287,92 @@ BEGIN
 END
 GO
 
-
-
-------------------------------------------------------------------------------------------------------------
-
-CREATE OR ALTER PROCEDURE consorcio.SP_mostrar_datos_inquilinos_propietarios
+----------------------------------MOSTRAR UFs (funciona)------------------------------------------------
+--------------------------------------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE consorcio.SP_leer_uf_txt
     @path NVARCHAR(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    BEGIN TRY
+        -- 1?? Borrar la tabla temporal si existe
+        IF OBJECT_ID('tempdb..#UF') IS NOT NULL
+            DROP TABLE #UF;
+
+        -- 2?? Crear tabla temporal reflejando el TXT (coeficiente como varchar por la coma)
+        CREATE TABLE #UF (
+            nombreConsorcio VARCHAR(50),
+            numeroUnidadFuncional VARCHAR(10),
+            piso VARCHAR(10),
+            departamento CHAR(1),
+            coeficiente VARCHAR(10),       -- varchar para leer 4,4
+            metrosCuadrados VARCHAR(10),   -- varchar temporal
+            bauleras VARCHAR(2),
+            cochera VARCHAR(2),
+            m2_baulera VARCHAR(10),
+            m2_cochera VARCHAR(10)
+        );
+
+        -- 3?? Armar BULK INSERT dinámico
+        DECLARE @sql NVARCHAR(MAX);
+        SET @sql = N'
+            BULK INSERT #UF
+            FROM ''' + @path + N'''
+            WITH (
+                FIRSTROW = 2,
+                FIELDTERMINATOR = ''\t'',
+                ROWTERMINATOR = ''\n'',
+                CODEPAGE = ''65001'',
+                DATAFILETYPE = ''char''
+            );
+        ';
+        EXEC sp_executesql @sql;
+
+        -- 4?? Opcional: convertir columnas numéricas a DECIMAL/INT
+        SELECT 
+            nombreConsorcio,
+            TRY_CAST(numeroUnidadFuncional AS INT) AS numeroUnidadFuncional,
+            piso,
+            departamento,
+            TRY_CAST(REPLACE(coeficiente, ',', '.') AS DECIMAL(5,2)) AS coeficiente,
+            TRY_CAST(metrosCuadrados AS INT) AS metrosCuadrados,
+            bauleras,
+            cochera,
+            TRY_CAST(m2_baulera AS INT) AS m2_baulera,
+            TRY_CAST(m2_cochera AS INT) AS m2_cochera
+        FROM #UF;
+
+    END TRY
+    BEGIN CATCH
+        PRINT '? Error al leer el archivo:';
+        PRINT ERROR_MESSAGE();
+    END CATCH
+END;
+GO
+
+-- Ejecutar con ruta dinámica
+EXEC consorcio.SP_leer_uf_txt 'C:\Archivos para el TP\UF por consorcio.txt';
+
+
+-------------------------------------------MOSTRAR ARCHIVO COMBINADO-----------------------------------------------------------------
+
+CREATE OR ALTER PROCEDURE consorcio.SP_mostrar_datos_inquilinos_propietarios_UF
+    @pathDatos NVARCHAR(255),
+    @pathUF NVARCHAR(255)
 AS
 BEGIN
     DECLARE @sqlQuery NVARCHAR(MAX);
 
     BEGIN TRY
+        -------------------------------------------------------------------------
+        -- 1?? BLOQUE PARA INQUILINOS / PROPIETARIOS (archivo original)
+        -------------------------------------------------------------------------
         SET @sqlQuery = '
-            -- 1. CREAR TABLA TEMPORAL
-            IF OBJECT_ID(''tempdb..#temporal'') IS NOT NULL
-                DROP TABLE #temporal;
+            IF OBJECT_ID(''tempdb..#temporal_datos'') IS NOT NULL
+                DROP TABLE #temporal_datos;
 
-            CREATE TABLE #temporal (
+            CREATE TABLE #temporal_datos (
                 Col1_Nombre         VARCHAR(100),
                 Col2_Apellido       VARCHAR(100),
                 Col3_DNI            VARCHAR(50),
@@ -313,9 +382,8 @@ BEGIN
                 Col7_Inquilino      VARCHAR(10)
             );
 
-            -- 2. CARGAR CSV
-            BULK INSERT #temporal
-            FROM ''' + @path + '''
+            BULK INSERT #temporal_datos
+            FROM ''' + @pathDatos + '''
             WITH (
                 FIELDTERMINATOR = '';'',
                 ROWTERMINATOR = ''0x0A'',
@@ -323,9 +391,9 @@ BEGIN
                 CODEPAGE = ''65001''
             );
 
-            -- 3. MOSTRAR DATOS
+            PRINT ''=== DATOS DE INQUILINOS / PROPIETARIOS ==='';
+
             SELECT
-                -- Nombre capitalizado
                 RTRIM(
                     (
                         SELECT UPPER(LEFT(value,1)) + LOWER(SUBSTRING(value,2,LEN(value))) + '' ''
@@ -334,7 +402,6 @@ BEGIN
                     ).value(''.'', ''NVARCHAR(MAX)'')
                 ) AS nombre,
                 
-                -- Apellido capitalizado
                 RTRIM(
                     (
                         SELECT UPPER(LEFT(value,1)) + LOWER(SUBSTRING(value,2,LEN(value))) + '' ''
@@ -369,18 +436,56 @@ BEGIN
                         THEN ''inquilino''
                     ELSE ''propietario''
                 END AS rol
-            FROM #temporal;
+            FROM #temporal_datos;
 
-            -- 4. LIMPIEZA
-            IF OBJECT_ID(''tempdb..#temporal'') IS NOT NULL
-                DROP TABLE #temporal;
+            DROP TABLE IF EXISTS #temporal_datos;
         ';
 
         EXEC sp_executesql @sqlQuery;
+
+        -------------------------------------------------------------------------
+        -- 2?? BLOQUE PARA UNIDADES FUNCIONALES (archivo nuevo)
+        -------------------------------------------------------------------------
+        SET @sqlQuery = '
+            IF OBJECT_ID(''tempdb..#temporal_UF'') IS NOT NULL
+                DROP TABLE #temporal_UF;
+
+            CREATE TABLE #temporal_UF (
+                Col1_CVU_CBU             VARCHAR(50),
+                Col2_NombreConsorcio     VARCHAR(100),
+                Col3_NumeroUF            INT,
+                Col4_Piso                VARCHAR(10),
+                Col5_Departamento        VARCHAR(10)
+            );
+
+            BULK INSERT #temporal_UF
+            FROM ''' + @pathUF + '''
+            WITH (
+                FIELDTERMINATOR = ''|'',
+                ROWTERMINATOR = ''0x0A'',
+                FIRSTROW = 2,
+                CODEPAGE = ''65001''
+            );
+
+            PRINT ''=== DATOS DE UNIDADES FUNCIONALES ==='';
+
+            SELECT
+                LTRIM(RTRIM(Col1_CVU_CBU))             AS CVU_CBU,
+                LTRIM(RTRIM(Col2_NombreConsorcio))     AS nombre_consorcio,
+                LTRIM(RTRIM(Col3_NumeroUF))            AS numero_unidad_funcional,
+                LTRIM(RTRIM(Col4_Piso))                AS piso,
+                LTRIM(RTRIM(Col5_Departamento))        AS departamento
+            FROM #temporal_UF;
+
+            DROP TABLE IF EXISTS #temporal_UF;
+        ';
+
+        EXEC sp_executesql @sqlQuery;
+
     END TRY
     BEGIN CATCH
-        IF OBJECT_ID('tempdb..#temporal') IS NOT NULL
-            DROP TABLE #temporal;
+        DROP TABLE IF EXISTS #temporal_datos;
+        DROP TABLE IF EXISTS #temporal_UF;
 
         SELECT
             'Error al mostrar los datos.' AS Resultado,
@@ -396,6 +501,6 @@ BEGIN
 END
 GO
 
-
-EXEC consorcio.SP_mostrar_datos_inquilinos_propietarios 
-    @path = 'C:\Archivos para el TP\Inquilino-propietarios-datos.csv';
+EXEC consorcio.SP_mostrar_datos_inquilinos_propietarios_UF
+    @pathDatos = 'C:\Archivos para el TP\Inquilino-propietarios-datos.csv',
+    @pathUF = 'C:\Archivos para el TP\Inquilino-propietarios-UF.csv';
