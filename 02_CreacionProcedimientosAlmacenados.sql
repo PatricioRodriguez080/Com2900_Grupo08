@@ -286,3 +286,116 @@ BEGIN
     DROP TABLE #pago_staging;
 END
 GO
+
+
+
+------------------------------------------------------------------------------------------------------------
+
+CREATE OR ALTER PROCEDURE consorcio.SP_mostrar_datos_inquilinos_propietarios
+    @path NVARCHAR(255)
+AS
+BEGIN
+    DECLARE @sqlQuery NVARCHAR(MAX);
+
+    BEGIN TRY
+        SET @sqlQuery = '
+            -- 1. CREAR TABLA TEMPORAL
+            IF OBJECT_ID(''tempdb..#temporal'') IS NOT NULL
+                DROP TABLE #temporal;
+
+            CREATE TABLE #temporal (
+                Col1_Nombre         VARCHAR(100),
+                Col2_Apellido       VARCHAR(100),
+                Col3_DNI            VARCHAR(50),
+                Col4_Email          VARCHAR(100),
+                Col5_Telefono       VARCHAR(50),
+                Col6_CuentaOrigen   CHAR(22),
+                Col7_Inquilino      VARCHAR(10)
+            );
+
+            -- 2. CARGAR CSV
+            BULK INSERT #temporal
+            FROM ''' + @path + '''
+            WITH (
+                FIELDTERMINATOR = '';'',
+                ROWTERMINATOR = ''0x0A'',
+                FIRSTROW = 2,
+                CODEPAGE = ''65001''
+            );
+
+            -- 3. MOSTRAR DATOS
+            SELECT
+                -- Nombre capitalizado
+                RTRIM(
+                    (
+                        SELECT UPPER(LEFT(value,1)) + LOWER(SUBSTRING(value,2,LEN(value))) + '' ''
+                        FROM STRING_SPLIT(LTRIM(RTRIM(Col1_Nombre)), '' '')
+                        FOR XML PATH(''''), TYPE
+                    ).value(''.'', ''NVARCHAR(MAX)'')
+                ) AS nombre,
+                
+                -- Apellido capitalizado
+                RTRIM(
+                    (
+                        SELECT UPPER(LEFT(value,1)) + LOWER(SUBSTRING(value,2,LEN(value))) + '' ''
+                        FROM STRING_SPLIT(LTRIM(RTRIM(Col2_Apellido)), '' '')
+                        FOR XML PATH(''''), TYPE
+                    ).value(''.'', ''NVARCHAR(MAX)'')
+                ) AS apellido,
+
+                CAST(LTRIM(RTRIM(Col3_DNI)) AS BIGINT) AS dni,
+                
+                LOWER(
+                    REPLACE(
+                        REPLACE(
+                            REPLACE(
+                                REPLACE(
+                                    LTRIM(RTRIM(Col4_Email)),
+                                    ''  '', '' ''
+                                ),
+                                '' '', ''_'' 
+                            ),
+                            ''__'', ''_'' 
+                        ),
+                        ''_@'', ''@''
+                    )
+                ) AS email,
+
+                LTRIM(RTRIM(Col5_Telefono)) AS telefono,
+                LTRIM(RTRIM(Col6_CuentaOrigen)) AS cuentaOrigen,
+                
+                CASE 
+                    WHEN TRY_CAST(REPLACE(REPLACE(LTRIM(RTRIM(Col7_Inquilino)), CHAR(13), ''''), CHAR(10), '''') AS INT) = 1 
+                        THEN ''inquilino''
+                    ELSE ''propietario''
+                END AS rol
+            FROM #temporal;
+
+            -- 4. LIMPIEZA
+            IF OBJECT_ID(''tempdb..#temporal'') IS NOT NULL
+                DROP TABLE #temporal;
+        ';
+
+        EXEC sp_executesql @sqlQuery;
+    END TRY
+    BEGIN CATCH
+        IF OBJECT_ID('tempdb..#temporal') IS NOT NULL
+            DROP TABLE #temporal;
+
+        SELECT
+            'Error al mostrar los datos.' AS Resultado,
+            ERROR_NUMBER() AS ErrorNumber,
+            ERROR_MESSAGE() AS ErrorMessage,
+            ERROR_LINE() AS ErrorLine;
+
+        THROW;
+        RETURN 1;
+    END CATCH
+
+    RETURN 0;
+END
+GO
+
+
+EXEC consorcio.SP_mostrar_datos_inquilinos_propietarios 
+    @path = 'C:\Archivos para el TP\Inquilino-propietarios-datos.csv';
