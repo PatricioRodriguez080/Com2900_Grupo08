@@ -101,7 +101,7 @@ BEGIN
 END;
 GO
 
------------- UF por consorcio.txt --------------------------
+------------ Archivo UF por consorcio.txt --------------------------
 
 GO
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_unidades_funcionales
@@ -217,12 +217,7 @@ GO
 
 ------- Archivo inquilino-propietarios-datos.csv -----------------
 -- La ruta debe ser ABSOLUTA y ACCESIBLE por el servicio de SQL Server, por eso elegimos alojar los docs en la raíz del disco C
-
-IF OBJECT_ID('consorcio.ImportarPersonas') IS NOT NULL
-    DROP PROCEDURE consorcio.ImportarPersonas;
-GO
-
-CREATE PROCEDURE consorcio.SP_importar_personas
+CREATE OR ALTER PROCEDURE consorcio.SP_importar_personas
     @path NVARCHAR(255)
 AS
 BEGIN
@@ -344,7 +339,7 @@ BEGIN
 END
 GO
 
----------- pagos_consorcios.csv ------------
+---------- Archivo pagos_consorcios.csv ------------
 
 CREATE OR ALTER PROCEDURE consorcio.SP_carga_pagos
     @path NVARCHAR(255)
@@ -401,9 +396,9 @@ BEGIN
 END
 GO
 
-------------- ARCHIVO NUEVO -----------------------------
+------------- Archivo Inquilino-propietarios-UF.csv -----------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_unidades_funcionales_csv
-    @path NVARCHAR(255) -- Ruta completa al archivo CSV (e.g., 'C:\data\Inquilino-propietarios-UF.csv')
+    @path NVARCHAR(255)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -430,9 +425,9 @@ BEGIN
         FROM ''' + @path + '''
         WITH
         (
-            FIELDTERMINATOR = ''|'',        -- Delimitador de campo del CSV
-            ROWTERMINATOR = ''\n'',        -- Fin de línea
-            CODEPAGE = ''ACP'',             -- Codificación
+            FIELDTERMINATOR = ''|'',     -- Delimitador de campo del CSV
+            ROWTERMINATOR = ''\n'',      -- Fin de línea
+            CODEPAGE = ''ACP'',          -- Codificación
             FIRSTROW = 2                 -- Ignorar la fila de encabezado
         );
     ';
@@ -444,20 +439,20 @@ BEGIN
     -------------------------------------------------------------------------
     INSERT INTO consorcio.unidad_funcional (
         idConsorcio,
-        cuentaOrigen,                         -- Mapea de stg_cvu_cbu
-        numeroUnidadFuncional,               -- Mapea de stg_nroUnidadFuncional
+        cuentaOrigen,                       -- Mapea de stg_cvu_cbu
+        numeroUnidadFuncional,              -- Mapea de stg_nroUnidadFuncional
         piso,
         departamento,
-        coeficiente,                         -- Valor por defecto (NOT NULL en DDL)
+        coeficiente,                        -- Valor por defecto (NOT NULL en DDL)
         metrosCuadrados                     -- Valor por defecto (NOT NULL en DDL)
     )
     SELECT
-        c.idConsorcio,                                               -- Obtener ID
-        CAST(TRIM(s.stg_cvu_cbu) AS CHAR(22)),                     -- Casting a CHAR(22)
+        c.idConsorcio,                                              -- Obtener ID
+        CAST(TRIM(s.stg_cvu_cbu) AS CHAR(22)),                      -- Casting a CHAR(22)
         CAST(TRIM(s.stg_nroUnidadFuncional) AS INT),
-        CAST(TRIM(s.stg_piso) AS CHAR(2)),                           -- Casting a CHAR(2)
-        CAST(TRIM(s.stg_departamento) AS CHAR(1)),                   -- Casting a CHAR(1)
-        1.00,                                                        -- Valor por defecto
+        CAST(TRIM(s.stg_piso) AS CHAR(2)),                          -- Casting a CHAR(2)
+        CAST(TRIM(s.stg_departamento) AS CHAR(1)),                  -- Casting a CHAR(1)
+        1.00,                                                       -- Valor por defecto
         1                                                           -- Valor por defecto (mínimo válido > 0)
     FROM
         #unidad_funcional_staging AS s
@@ -484,19 +479,3 @@ BEGIN
     DROP TABLE #unidad_funcional_staging;
 END;
 GO
-
-EXEC consorcio.SP_importar_unidades_funcionales_csv @path= 'C:\Archivos-para-el-TP\Archivos para el TP\Inquilino-propietarios-UF.csv'
-
-
-SELECT
-    uf.cuentaOrigen,
-    c.nombre AS nombre_consorcio,
-    uf.numeroUnidadFuncional,
-    uf.piso,
-    uf.departamento
-FROM
-    consorcio.unidad_funcional AS uf
-JOIN
-    consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio;
-
-SELECT * FROM consorcio.unidad_funcional
