@@ -19,7 +19,7 @@ EXEC consorcio.SP_importar_consorcios_excel @path = 'C:\Archivos para el TP\dato
 SELECT * FROM consorcio.consorcio;
 
 ------- Archivo inquilino-propietarios-datos.csv -----------------
-EXEC consorcio.SP_importar_personas @path = 'C:\Archivos-para-el-TP\Archivos para el TP\Inquilino-propietarios-datos.csv';
+EXEC consorcio.SP_importar_personas @path = 'C:\Archivos para el TP\Inquilino-propietarios-datos.csv';
 
 SELECT * FROM consorcio.persona;
 
