@@ -67,6 +67,7 @@ CREATE TABLE consorcio.unidad_funcional (
     departamento CHAR (1) NOT NULL,
 	coeficiente DECIMAL(5,2) NOT NULL,
 	metrosCuadrados INT NOT NULL,
+    fechaBaja DATE NULL DEFAULT NULL,
 
 	CONSTRAINT fk_unidadFuncional_consorcio FOREIGN KEY (idConsorcio) REFERENCES consorcio.consorcio(idConsorcio),
 	CONSTRAINT chk_unidadFuncional_cuentaOrigen CHECK (ISNUMERIC(cuentaOrigen) = 1),
