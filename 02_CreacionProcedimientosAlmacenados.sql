@@ -101,6 +101,120 @@ BEGIN
 END;
 GO
 
+------------ UF por consorcio.txt --------------------------
+
+GO
+CREATE OR ALTER PROCEDURE consorcio.SP_importar_unidades_funcionales
+    @path NVARCHAR(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    BEGIN TRY
+        -------------------------------------------------
+        -- 1?? Eliminar tabla temporal si existe
+        IF OBJECT_ID('tempdb..#TempUF') IS NOT NULL
+            DROP TABLE #TempUF;
+
+        -------------------------------------------------
+        -- 2?? Crear tabla temporal
+        CREATE TABLE #TempUF (
+            nombreConsorcio NVARCHAR(100),
+            numeroUnidadFuncional NVARCHAR(10),
+            piso CHAR(2),
+            departamento CHAR(1),
+            coeficiente NVARCHAR(10),
+            metrosCuadrados NVARCHAR(10),
+            bauleras NVARCHAR(2),
+            cochera NVARCHAR(2),
+            m2_baulera NVARCHAR(10),
+            m2_cochera NVARCHAR(10)
+        );
+
+        -------------------------------------------------
+        -- 3?? Cargar datos desde archivo .txt
+        DECLARE @sql NVARCHAR(MAX);
+        SET @sql = N'
+            BULK INSERT #TempUF
+            FROM ''' + @path + N'''
+            WITH (
+                FIRSTROW = 2,
+                FIELDTERMINATOR = ''\t'',
+                ROWTERMINATOR = ''\n'',
+                CODEPAGE = ''65001'',
+                DATAFILETYPE = ''char''
+            );';
+        EXEC sp_executesql @sql;
+
+        -------------------------------------------------
+        -- 4?? Insertar Unidades Funcionales
+        INSERT INTO consorcio.unidad_funcional
+            (idConsorcio, cuentaOrigen, numeroUnidadFuncional, piso, departamento, coeficiente, metrosCuadrados)
+        SELECT
+            c.idConsorcio,
+            ROW_NUMBER() OVER(PARTITION BY c.idConsorcio ORDER BY t.numeroUnidadFuncional) AS cuentaOrigen,
+            TRY_CAST(t.numeroUnidadFuncional AS INT),
+            t.piso,
+            t.departamento,
+            TRY_CAST(REPLACE(t.coeficiente, ',', '.') AS DECIMAL(5,2)),
+            TRY_CAST(t.metrosCuadrados AS INT)
+        FROM #TempUF t
+        INNER JOIN consorcio.consorcio c
+            ON LTRIM(RTRIM(c.nombre)) = LTRIM(RTRIM(t.nombreConsorcio))
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM consorcio.unidad_funcional uf
+            WHERE uf.idConsorcio = c.idConsorcio
+              AND uf.piso = t.piso
+              AND uf.departamento = t.departamento
+        );
+
+        -------------------------------------------------
+        -- 5?? Insertar Cocheras
+        INSERT INTO consorcio.cochera (idUnidadFuncional, metrosCuadrados, coeficiente)
+        SELECT
+            uf.idUnidadFuncional,
+            TRY_CAST(REPLACE(t.m2_cochera, ',', '.') AS INT),
+            TRY_CAST(REPLACE(t.coeficiente, ',', '.') AS DECIMAL(5,2))
+        FROM #TempUF t
+        INNER JOIN consorcio.consorcio c
+            ON LTRIM(RTRIM(c.nombre)) = LTRIM(RTRIM(t.nombreConsorcio))
+        INNER JOIN consorcio.unidad_funcional uf
+            ON uf.idConsorcio = c.idConsorcio
+           AND uf.piso = t.piso
+           AND uf.departamento = t.departamento
+        WHERE t.cochera = 'SI' AND TRY_CAST(REPLACE(t.m2_cochera, ',', '.') AS INT) > 0;
+
+        -------------------------------------------------
+        -- 6?? Insertar Bauleras
+        INSERT INTO consorcio.baulera (idUnidadFuncional, metrosCuadrados, coeficiente)
+        SELECT
+            uf.idUnidadFuncional,
+            TRY_CAST(REPLACE(t.m2_baulera, ',', '.') AS INT),
+            TRY_CAST(REPLACE(t.coeficiente, ',', '.') AS DECIMAL(5,2))
+        FROM #TempUF t
+        INNER JOIN consorcio.consorcio c
+            ON LTRIM(RTRIM(c.nombre)) = LTRIM(RTRIM(t.nombreConsorcio))
+        INNER JOIN consorcio.unidad_funcional uf
+            ON uf.idConsorcio = c.idConsorcio
+           AND uf.piso = t.piso
+           AND uf.departamento = t.departamento
+        WHERE t.bauleras = 'SI' AND TRY_CAST(REPLACE(t.m2_baulera, ',', '.') AS INT) > 0;
+
+        -------------------------------------------------
+        -- 7?? Limpiar tabla temporal
+        DROP TABLE #TempUF;
+
+        PRINT '? Importación de Unidades Funcionales, Cocheras y Bauleras finalizada correctamente.';
+
+    END TRY
+    BEGIN CATCH
+        PRINT '? Error al importar:';
+        PRINT ERROR_MESSAGE();
+    END CATCH
+END;
+GO
+
 ------- Archivo inquilino-propietarios-datos.csv -----------------
 -- La ruta debe ser ABSOLUTA y ACCESIBLE por el servicio de SQL Server, por eso elegimos alojar los docs en la raíz del disco C
 
