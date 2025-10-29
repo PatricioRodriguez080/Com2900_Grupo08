@@ -108,16 +108,13 @@ IF OBJECT_ID('consorcio.ImportarPersonas') IS NOT NULL
     DROP PROCEDURE consorcio.ImportarPersonas;
 GO
 
-CREATE PROCEDURE consorcio.ImportarPersonas
-    @path NVARCHAR(255) -- Parámetro para la ruta del archivo CSV
+CREATE PROCEDURE consorcio.SP_importar_personas
+    @path NVARCHAR(255)
 AS
 BEGIN
-    -- Se declara una sola variable para la ejecución completa
-    DECLARE @sqlQuery NVARCHAR(MAX); 
+    DECLARE @sqlQuery NVARCHAR(MAX);
 
     BEGIN TRY
-        
-        -- Combinar la creación de la tabla, el BULK INSERT y el INSERT final en una sola cadena
         SET @sqlQuery = '
             -- 1. CREAR TABLA TEMPORAL
             IF OBJECT_ID(''tempdb..#temporal'') IS NOT NULL
@@ -133,17 +130,17 @@ BEGIN
                 Col7_Inquilino      VARCHAR(10)
             );
             
-            -- 2. BULK INSERT (Carga de datos)
+            -- 2. CARGAR CSV
             BULK INSERT #temporal
-            FROM ''' + @path + ''' 
+            FROM ''' + @path + '''
             WITH (
-                FIELDTERMINATOR = '';'', -- Delimitador correcto
+                FIELDTERMINATOR = '';'',
                 ROWTERMINATOR = ''0x0A'',
-                FIRSTROW = 2, -- Omitir encabezado
-                CODEPAGE = ''65001'' 
+                FIRSTROW = 2,
+                CODEPAGE = ''65001''
             );
 
-            -- 3. INSERTAR EN LA TABLA FINAL consorcio.persona
+            -- 3. INSERTAR EN TABLA FINAL (con limpieza y validación)
             INSERT INTO consorcio.persona (
                 nombre,
                 apellido,
@@ -152,50 +149,90 @@ BEGIN
                 telefono,
                 cuentaOrigen
             )
-            SELECT
-                LTRIM(RTRIM(Col1_Nombre)) AS nombre,
-                LTRIM(RTRIM(Col2_Apellido)) AS apellido,
-                CAST(LTRIM(RTRIM(Col3_DNI)) AS INT) AS dni, 
-                LTRIM(RTRIM(Col4_Email)) AS email,
+            SELECT DISTINCT
+                -- Nombre: primera letra de cada palabra en mayúscula, conservando espacios
+                RTRIM(
+                    (
+                        SELECT 
+                            UPPER(LEFT(value,1)) + LOWER(SUBSTRING(value,2,LEN(value))) + '' ''
+                        FROM STRING_SPLIT(LTRIM(RTRIM(Col1_Nombre)), '' '')
+                        FOR XML PATH(''''), TYPE
+                    ).value(''.'', ''NVARCHAR(MAX)'')
+                ) AS nombre,
+
+                -- Apellido: primera letra de cada palabra en mayúscula, conservando espacios
+                RTRIM(
+                    (
+                        SELECT 
+                            UPPER(LEFT(value,1)) + LOWER(SUBSTRING(value,2,LEN(value))) + '' ''
+                        FROM STRING_SPLIT(LTRIM(RTRIM(Col2_Apellido)), '' '')
+                        FOR XML PATH(''''), TYPE
+                    ).value(''.'', ''NVARCHAR(MAX)'')
+                ) AS apellido,
+
+                -- DNI en entero
+                CAST(LTRIM(RTRIM(Col3_DNI)) AS INT) AS dni,
+
+                -- Email limpiado
+                LOWER(
+                    REPLACE(
+                        REPLACE(
+                            REPLACE(
+                                REPLACE(
+                                    LTRIM(RTRIM(Col4_Email)),
+                                    ''  '', '' ''
+                                ),
+                                '' '', ''_'' 
+                            ),
+                            ''__'', ''_'' 
+                        ),
+                        ''_@'', ''@''
+                    )
+                ) AS email,
+
+                -- Teléfono y cuenta origen normales
                 LTRIM(RTRIM(Col5_Telefono)) AS telefono,
                 LTRIM(RTRIM(Col6_CuentaOrigen)) AS cuentaOrigen
-            FROM #temporal; -- ¡Ahora en el mismo ámbito de ejecución!
+            FROM #temporal t
+            WHERE 
+                -- Evitar duplicados en la tabla destino
+                NOT EXISTS (
+                    SELECT 1 
+                    FROM consorcio.persona p 
+                    WHERE p.dni = CAST(LTRIM(RTRIM(t.Col3_DNI)) AS INT)
+                )
+                AND ISNUMERIC(LTRIM(RTRIM(t.Col3_DNI))) = 1
+                AND LTRIM(RTRIM(t.Col3_DNI)) <> '''';  -- Evitar DNIs vacíos
 
             -- 4. LIMPIEZA
             IF OBJECT_ID(''tempdb..#temporal'') IS NOT NULL
                 DROP TABLE #temporal;
         ';
 
-        -- Ejecutar todo el proceso en una sola llamada
-        EXEC sp_executesql @sqlQuery; 
-
+        EXEC sp_executesql @sqlQuery;
         SELECT 'Importación de datos de persona completada con éxito.' AS Resultado;
-
     END TRY
     BEGIN CATCH
-        -- Manejo de errores
         SELECT
             'Error al importar los datos. La tabla temporal fue limpiada.' AS Resultado,
             ERROR_NUMBER() AS ErrorNumber,
             ERROR_MESSAGE() AS ErrorMessage,
             ERROR_LINE() AS ErrorLine;
-            
-        -- Limpieza de emergencia, en caso de que la tabla haya llegado a existir
+
         SET @sqlQuery = 'IF OBJECT_ID(''tempdb..#temporal'') IS NOT NULL DROP TABLE #temporal;';
         EXEC sp_executesql @sqlQuery;
-            
-        THROW; 
+
+        THROW;
         RETURN 1;
     END CATCH
-    
-    RETURN 0; 
+
+    RETURN 0;
 END
 GO
 
-
 ---------- pagos_consorcios.csv ------------
 
-CREATE OR ALTER PROCEDURE consorcio.sp_cargaPagos
+CREATE OR ALTER PROCEDURE consorcio.SP_carga_pagos
     @path NVARCHAR(255)
 AS
 BEGIN
