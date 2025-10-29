@@ -39,6 +39,7 @@ CREATE TABLE consorcio.consorcio (
 	direccion VARCHAR(20) NOT NULL,
 	cantidadUnidadesFuncionales INT NOT NULL,
 	metrosCuadradosTotales INT NOT NULL,
+    fechaBaja DATE NULL DEFAULT NULL,
 
 	CONSTRAINT chk_unidadesFuncionales_min CHECK (cantidadUnidadesFuncionales > 0),
 	CONSTRAINT chk_metrosCuadradosTotales_max CHECK (metrosCuadradosTotales > 0)
