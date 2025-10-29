@@ -63,7 +63,8 @@ CREATE TABLE consorcio.unidad_funcional (
 	idConsorcio INT NOT NULL,
 	cuentaOrigen VARCHAR(22) NOT NULL,
 	numeroUnidadFuncional INT NOT NULL,
-	piso INT NOT NULL,
+	piso CHAR (2) NOT NULL,
+    departamento CHAR (1) NOT NULL,
 	coeficiente DECIMAL(5,2) NOT NULL,
 	metrosCuadrados INT NOT NULL,
 
