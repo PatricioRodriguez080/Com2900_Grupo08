@@ -286,3 +286,103 @@ BEGIN
     DROP TABLE #pago_staging;
 END
 GO
+
+------------- ARCHIVO NUEVO -----------------------------
+CREATE OR ALTER PROCEDURE consorcio.SP_importar_unidades_funcionales_csv
+    @path NVARCHAR(255) -- Ruta completa al archivo CSV (e.g., 'C:\data\Inquilino-propietarios-UF.csv')
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- 1. Crear tabla temporal de staging (usa tempdb para aislamiento)
+    IF OBJECT_ID('tempdb..#unidad_funcional_staging', 'U') IS NOT NULL
+        DROP TABLE #unidad_funcional_staging;
+
+    CREATE TABLE #unidad_funcional_staging (
+        stg_cvu_cbu               NVARCHAR(50),           -- CVU/CBU
+        stg_nombre_consorcio      NVARCHAR(50),           -- Nombre del consorcio
+        stg_nroUnidadFuncional    NVARCHAR(10),           -- nroUnidadFuncional
+        stg_piso                  NVARCHAR(10),           -- piso
+        stg_departamento          NVARCHAR(10)            -- departamento
+    );
+
+    DECLARE @BulkSqlCmd NVARCHAR(MAX);
+
+    -------------------------------------------------------------------------
+    -- 2. CARGAR DATOS EN LA TABLA TEMPORAL (#unidad_funcional_staging)
+    -------------------------------------------------------------------------
+    SET @BulkSqlCmd = N'
+        BULK INSERT #unidad_funcional_staging
+        FROM ''' + @path + '''
+        WITH
+        (
+            FIELDTERMINATOR = ''|'',        -- Delimitador de campo del CSV
+            ROWTERMINATOR = ''\n'',        -- Fin de línea
+            CODEPAGE = ''ACP'',             -- Codificación
+            FIRSTROW = 2                 -- Ignorar la fila de encabezado
+        );
+    ';
+
+    EXEC sp_executesql @BulkSqlCmd;
+
+    -------------------------------------------------------------------------
+    -- 3. INSERTAR EN LA TABLA FINAL (consorcio.unidad_funcional)
+    -------------------------------------------------------------------------
+    INSERT INTO consorcio.unidad_funcional (
+        idConsorcio,
+        cuentaOrigen,                         -- Mapea de stg_cvu_cbu
+        numeroUnidadFuncional,               -- Mapea de stg_nroUnidadFuncional
+        piso,
+        departamento,
+        coeficiente,                         -- Valor por defecto (NOT NULL en DDL)
+        metrosCuadrados                     -- Valor por defecto (NOT NULL en DDL)
+    )
+    SELECT
+        c.idConsorcio,                                               -- Obtener ID
+        CAST(TRIM(s.stg_cvu_cbu) AS CHAR(22)),                     -- Casting a CHAR(22)
+        CAST(TRIM(s.stg_nroUnidadFuncional) AS INT),
+        CAST(TRIM(s.stg_piso) AS CHAR(2)),                           -- Casting a CHAR(2)
+        CAST(TRIM(s.stg_departamento) AS CHAR(1)),                   -- Casting a CHAR(1)
+        1.00,                                                        -- Valor por defecto
+        1                                                           -- Valor por defecto (mínimo válido > 0)
+    FROM
+        #unidad_funcional_staging AS s
+    INNER JOIN
+        consorcio.consorcio AS c                                    -- Obtener idConsorcio
+        ON TRIM(s.stg_nombre_consorcio) = c.nombre
+    WHERE
+        -- Validaciones de consistencia
+        TRIM(s.stg_cvu_cbu) IS NOT NULL
+        AND TRIM(s.stg_nombre_consorcio) IS NOT NULL
+        AND ISNUMERIC(TRIM(s.stg_nroUnidadFuncional)) = 1
+        AND CAST(TRIM(s.stg_nroUnidadFuncional) AS INT) > 0
+        -- Prevenir duplicados (clave: Consorcio, UF, Piso, Depto)
+        AND NOT EXISTS (
+            SELECT 1
+            FROM consorcio.unidad_funcional uf
+            WHERE uf.idConsorcio = c.idConsorcio
+              AND uf.numeroUnidadFuncional = CAST(TRIM(s.stg_nroUnidadFuncional) AS INT)
+              AND uf.piso = TRIM(s.stg_piso)
+              AND uf.departamento = TRIM(s.stg_departamento)
+        );
+
+    -- 4. Eliminar tabla temporal
+    DROP TABLE #unidad_funcional_staging;
+END;
+GO
+
+EXEC consorcio.SP_importar_unidades_funcionales_csv @path= 'C:\Archivos-para-el-TP\Archivos para el TP\Inquilino-propietarios-UF.csv'
+
+
+SELECT
+    uf.cuentaOrigen,
+    c.nombre AS nombre_consorcio,
+    uf.numeroUnidadFuncional,
+    uf.piso,
+    uf.departamento
+FROM
+    consorcio.unidad_funcional AS uf
+JOIN
+    consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio;
+
+SELECT * FROM consorcio.unidad_funcional

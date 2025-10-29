@@ -14,7 +14,7 @@ Enunciado:       "03 - Ejecución de Procedimientos Almacenados"
 */
 
 ------------ Archivo datos varios.xlsx --------------------------
-EXEC consorcio.SP_importar_consorcios_excel @path = 'C:\Archivos para el TP\datos varios.xlsx';
+EXEC consorcio.SP_importar_consorcios_excel @path = 'C:\Archivos-para-el-TP\Archivos para el TP\datos varios.xlsx';
 
 SELECT * FROM consorcio.consorcio;
 
@@ -24,6 +24,6 @@ EXEC consorcio.SP_importar_personas @path = 'C:\Archivos-para-el-TP\Archivos par
 SELECT * FROM consorcio.persona;
 
 ---------- pagos_consorcios.csv ------------
-EXEC consorcio.SP_carga_pagos @path = 'C:\Archivos para el TP\pagos_consorcios.csv';
+EXEC consorcio.SP_carga_pagos @path = 'C:\Archivos-para-el-TP\Archivos para el TP\pagos_consorcios.csv';
 
 SELECT * FROM consorcio.pago;
