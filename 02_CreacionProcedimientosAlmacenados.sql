@@ -111,13 +111,8 @@ BEGIN
     SET NOCOUNT ON;
 
     BEGIN TRY
-        -------------------------------------------------
-        -- 1?? Eliminar tabla temporal si existe
         IF OBJECT_ID('tempdb..#TempUF') IS NOT NULL
             DROP TABLE #TempUF;
-
-        -------------------------------------------------
-        -- 2?? Crear tabla temporal
         CREATE TABLE #TempUF (
             nombreConsorcio NVARCHAR(100),
             numeroUnidadFuncional NVARCHAR(10),
@@ -131,8 +126,6 @@ BEGIN
             m2_cochera NVARCHAR(10)
         );
 
-        -------------------------------------------------
-        -- 3?? Cargar datos desde archivo .txt
         DECLARE @sql NVARCHAR(MAX);
         SET @sql = N'
             BULK INSERT #TempUF
@@ -146,8 +139,6 @@ BEGIN
             );';
         EXEC sp_executesql @sql;
 
-        -------------------------------------------------
-        -- 4?? Insertar Unidades Funcionales
         INSERT INTO consorcio.unidad_funcional
             (idConsorcio, cuentaOrigen, numeroUnidadFuncional, piso, departamento, coeficiente, metrosCuadrados)
         SELECT
@@ -169,8 +160,6 @@ BEGIN
               AND uf.departamento = t.departamento
         );
 
-        -------------------------------------------------
-        -- 5?? Insertar Cocheras
         INSERT INTO consorcio.cochera (idUnidadFuncional, metrosCuadrados, coeficiente)
         SELECT
             uf.idUnidadFuncional,
@@ -185,8 +174,6 @@ BEGIN
            AND uf.departamento = t.departamento
         WHERE t.cochera = 'SI' AND TRY_CAST(REPLACE(t.m2_cochera, ',', '.') AS INT) > 0;
 
-        -------------------------------------------------
-        -- 6?? Insertar Bauleras
         INSERT INTO consorcio.baulera (idUnidadFuncional, metrosCuadrados, coeficiente)
         SELECT
             uf.idUnidadFuncional,
@@ -201,15 +188,10 @@ BEGIN
            AND uf.departamento = t.departamento
         WHERE t.bauleras = 'SI' AND TRY_CAST(REPLACE(t.m2_baulera, ',', '.') AS INT) > 0;
 
-        -------------------------------------------------
-        -- 7?? Limpiar tabla temporal
         DROP TABLE #TempUF;
-
-        PRINT '? Importación de Unidades Funcionales, Cocheras y Bauleras finalizada correctamente.';
 
     END TRY
     BEGIN CATCH
-        PRINT '? Error al importar:';
         PRINT ERROR_MESSAGE();
     END CATCH
 END;
@@ -301,7 +283,16 @@ BEGIN
 
                 -- Teléfono y cuenta origen normales
                 LTRIM(RTRIM(Col5_Telefono)) AS telefono,
-                LTRIM(RTRIM(Col6_CuentaOrigen)) AS cuentaOrigen
+
+                CAST(
+                    LEFT(
+                        REPLACE(
+                            REPLACE(LTRIM(RTRIM(Col6_CuentaOrigen)), '','', ''''),
+                        ''E+21'', '''')
+                         + REPLICATE(''0'',22),
+                    22) AS CHAR(22)
+                ) AS cuentaOrigen
+
             FROM #temporal t
             WHERE 
                 -- Evitar duplicados en la tabla destino
@@ -338,6 +329,8 @@ BEGIN
     RETURN 0;
 END
 GO
+
+
 
 ---------- Archivo pagos_consorcios.csv ------------
 
