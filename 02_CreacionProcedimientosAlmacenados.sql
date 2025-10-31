@@ -1,5 +1,5 @@
 /*
------------------------------------------------------------------
+===============================================================================
 Materia:         Bases de Datos Aplicadas
 Comisión:        Com 01-2900
 Grupo:           G08
@@ -10,11 +10,15 @@ Integrantes:
     Rodriguez, Patricio 45683229
     Ruiz, Leonel Emiliano 45537914
 Enunciado:       "02 - Creación de Procedimientos Almacenados"
------------------------------------------------------------------
+===============================================================================
 */
 
-USE Com2900G08
------------- Archivo datos varios.xlsx --------------------------
+
+--------------------------------------------------------------------------------
+-- ?? ARCHIVO: datos varios.xlsx
+-- ?? PROCEDIMIENTO: Importar consorcios
+--------------------------------------------------------------------------------
+
 -- Enable Ad Hoc Distributed Queries
 EXEC sp_configure 'show advanced options', 1; RECONFIGURE;
 EXEC sp_configure 'Ad Hoc Distributed Queries', 1; RECONFIGURE;
@@ -102,8 +106,10 @@ BEGIN
 END;
 GO
 
-------- Archivo inquilino-propietarios-datos.csv -----------------
--- La ruta debe ser ABSOLUTA y ACCESIBLE por el servicio de SQL Server, por eso elegimos alojar los docs en la raíz del disco C
+--------------------------------------------------------------------------------
+-- ?? ARCHIVO: inquilino-propietarios-datos.csv
+-- ?? PROCEDIMIENTO: Importar personas
+--------------------------------------------------------------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_personas
     @path NVARCHAR(255)
 AS
@@ -270,7 +276,11 @@ BEGIN
 END
 GO
 
------------- Archivo UF por consorcio.txt --------------------------
+--------------------------------------------------------------------------------
+-- ?? ARCHIVO: UF por consorcio.txt
+-- ?? PROCEDIMIENTO: Importar unidades funcionales, cocheras y bauleras
+-- ?? Sin cuenta origen asociada (se carga en el siguiente)
+--------------------------------------------------------------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_unidades_funcionales
     @path NVARCHAR(255)
 AS
@@ -364,9 +374,12 @@ BEGIN
 END;
 GO
 
------------------------ Archivo importar_unidades_funcionales.csv --------------------------
+--------------------------------------------------------------------------------
+-- ?? ARCHIVO: inquilino-propietarios-UF.csv
+-- ?? PROCEDIMIENTO: Importar cuentas origen para las UF ya creadas
+--------------------------------------------------------------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_unidades_funcionales_csv
-    @path NVARCHAR(255) -- Ruta a Inquilino-propietarios-UF.csv
+    @path NVARCHAR(255)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -419,7 +432,11 @@ BEGIN
     DROP TABLE #tempUF_CSV;
 END;
 GO
----------- Archivo pagos_consorcios.csv ------------
+
+--------------------------------------------------------------------------------
+-- ?? ARCHIVO: pagos_consorcios.csv
+-- ?? PROCEDIMIENTO: Importar pagos
+--------------------------------------------------------------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_carga_pagos
     @path NVARCHAR(255)
 AS
