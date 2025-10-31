@@ -22,8 +22,9 @@ SELECT * FROM consorcio.consorcio;
 EXEC consorcio.SP_importar_personas @path = 'C:\Archivos para el TP\Inquilino-propietarios-datos.csv';
 
 SELECT * FROM consorcio.persona
-SELECT * FROM consorcio.persona_unidad_funcional;
+SELECT * FROM consorcio.persona_unidad_funcional
 SELECT * FROM consorcio.unidad_funcional
+
 ------------ Archivo UF por consorcio.txt ------------------------------------
 EXEC consorcio.SP_importar_unidades_funcionales @path = 'C:\Archivos para el TP\UF por consorcio.txt';
 
