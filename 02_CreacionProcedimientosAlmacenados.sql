@@ -15,8 +15,8 @@ Enunciado:       "02 - Creación de Procedimientos Almacenados"
 
 
 --------------------------------------------------------------------------------
--- ?? ARCHIVO: datos varios.xlsx
--- ?? PROCEDIMIENTO: Importar consorcios
+-- ARCHIVO: datos varios.xlsx
+-- PROCEDIMIENTO: Importar consorcios
 --------------------------------------------------------------------------------
 
 -- Enable Ad Hoc Distributed Queries
@@ -107,8 +107,8 @@ END;
 GO
 
 --------------------------------------------------------------------------------
--- ?? ARCHIVO: inquilino-propietarios-datos.csv
--- ?? PROCEDIMIENTO: Importar personas
+-- ARCHIVO: inquilino-propietarios-datos.csv
+-- PROCEDIMIENTO: Importar personas
 --------------------------------------------------------------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_personas
     @path NVARCHAR(255)
@@ -277,9 +277,9 @@ END
 GO
 
 --------------------------------------------------------------------------------
--- ?? ARCHIVO: UF por consorcio.txt
--- ?? PROCEDIMIENTO: Importar unidades funcionales, cocheras y bauleras
--- ?? Sin cuenta origen asociada (se carga en el siguiente)
+-- ARCHIVO: UF por consorcio.txt
+-- PROCEDIMIENTO: Importar unidades funcionales, cocheras y bauleras
+-- Sin cuenta origen asociada (se carga en el siguiente)
 --------------------------------------------------------------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_unidades_funcionales
     @path NVARCHAR(255)
@@ -375,8 +375,8 @@ END;
 GO
 
 --------------------------------------------------------------------------------
--- ?? ARCHIVO: inquilino-propietarios-UF.csv
--- ?? PROCEDIMIENTO: Importar cuentas origen para las UF ya creadas
+-- ARCHIVO: inquilino-propietarios-UF.csv
+-- PROCEDIMIENTO: Importar cuentas origen para las UF ya creadas
 --------------------------------------------------------------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_unidades_funcionales_csv
     @path NVARCHAR(255)
@@ -434,8 +434,8 @@ END;
 GO
 
 --------------------------------------------------------------------------------
--- ?? ARCHIVO: pagos_consorcios.csv
--- ?? PROCEDIMIENTO: Importar pagos
+-- ARCHIVO: pagos_consorcios.csv
+-- PROCEDIMIENTO: Importar pagos
 --------------------------------------------------------------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_carga_pagos
     @path NVARCHAR(255)
