@@ -125,7 +125,7 @@ BEGIN
     
     BEGIN TRY
         
-        -- 1. CREAR TABLA TEMPORAL (ESTÁTICO)
+        -- 1. CREAR TABLA TEMPORAL (MODIFICADA: Col7_Inquilino es DECIMAL)
         IF OBJECT_ID('tempdb..#temporal') IS NOT NULL
             DROP TABLE #temporal;
             
@@ -136,7 +136,7 @@ BEGIN
             Col4_Email          VARCHAR(100),
             Col5_Telefono       VARCHAR(50),
             Col6_CuentaOrigen   CHAR(22),
-            Col7_Inquilino      VARCHAR(10)
+            Col7_Inquilino      DECIMAL(2, 0) -- <--- CAMBIO A DECIMAL(2, 0)
         );
         
         ---
@@ -159,29 +159,29 @@ BEGIN
         
         -- 3. INSERTAR EN consorcio.persona (ESTÁTICO)
         WITH DatosLimpios AS (
-            SELECT 
-                -- Limpieza de Nombre: PRIMERO reemplazos, LUEGO capitalización
+            SELECT  
+                -- Limpieza de Nombre
                 RTRIM(
                     (
                         SELECT  
                             UPPER(LEFT(value, 1)) + LOWER(SUBSTRING(value, 2, LEN(value))) + ' '
                         FROM STRING_SPLIT(
                             LTRIM(RTRIM(
-                                REPLACE(REPLACE(REPLACE(t.Col1_Nombre, '‚', 'é'), '¥', 'ñ'), '¡', 'í') -- << REEMPLAZOS APLICADOS
+                                REPLACE(REPLACE(REPLACE(t.Col1_Nombre, '‚', 'é'), '¥', 'ñ'), '¡', 'í') 
                             )), ' '
                         )
                         FOR XML PATH(''), TYPE
                     ).value('.', 'NVARCHAR(MAX)')
                 ) AS nombre,
 
-                -- Limpieza de Apellido: PRIMERO reemplazos, LUEGO capitalización
+                -- Limpieza de Apellido
                 RTRIM(
                     (
                         SELECT  
                             UPPER(LEFT(value, 1)) + LOWER(SUBSTRING(value, 2, LEN(value))) + ' '
                         FROM STRING_SPLIT(
                             LTRIM(RTRIM(
-                                REPLACE(REPLACE(REPLACE(t.Col2_Apellido, '‚', 'é'), '¥', 'ñ'), '¡', 'í') -- << REEMPLAZOS APLICADOS
+                                REPLACE(REPLACE(REPLACE(t.Col2_Apellido, '‚', 'é'), '¥', 'ñ'), '¡', 'í') 
                             )), ' '
                         )
                         FOR XML PATH(''), TYPE
@@ -191,13 +191,13 @@ BEGIN
                 -- DNI en entero
                 CAST(LTRIM(RTRIM(t.Col3_DNI)) AS INT) AS dni,
 
-                -- Email limpiado: PRIMERO reemplazos, LUEGO a minúsculas y limpieza de espacios/caracteres
+                -- Email limpiado
                 LOWER(
                     REPLACE(
                         REPLACE(
                             REPLACE(
                                 LTRIM(RTRIM(
-                                    REPLACE(REPLACE(REPLACE(t.Col4_Email, '‚', 'é'), '¥', 'ñ'), '¡', 'í') -- << REEMPLAZOS APLICADOS
+                                    REPLACE(REPLACE(REPLACE(t.Col4_Email, '‚', 'é'), '¥', 'ñ'), '¡', 'í') 
                                 )),
                                 ' ', '_'
                             ),
@@ -211,14 +211,10 @@ BEGIN
                 LTRIM(RTRIM(t.Col5_Telefono)) AS telefono,
                 LTRIM(RTRIM(t.Col6_CuentaOrigen)) AS cuentaOrigen,
                 
-                -- Campo Inquilino
-                LOWER(LTRIM(RTRIM(t.Col7_Inquilino))) AS inquilino_raw,
-
                 -- Deduplicación
                 ROW_NUMBER() OVER (PARTITION BY t.Col3_DNI ORDER BY t.Col1_Nombre) as rn
             FROM #temporal t
             WHERE 
-                -- 1. Asegurar que el DNI sea numérico y no vacío
                 ISNUMERIC(LTRIM(RTRIM(t.Col3_DNI))) = 1
                 AND LTRIM(RTRIM(t.Col3_DNI)) <> ''
         )
@@ -226,14 +222,11 @@ BEGIN
         INSERT INTO consorcio.persona (
             nombre, apellido, dni, email, telefono, cuentaOrigen
         )
-        SELECT 
+        SELECT  
             dl.nombre, dl.apellido, dl.dni, dl.email, dl.telefono, dl.cuentaOrigen
         FROM DatosLimpios dl
         WHERE
-            -- 1. Eliminar duplicados internos
             dl.rn = 1
-            
-            -- 2. Evitar duplicados en la tabla destino
             AND NOT EXISTS (
                 SELECT 1 
                 FROM consorcio.persona p 
@@ -242,22 +235,22 @@ BEGIN
 
         ---
         
-        -- 4. INSERTAR RELACIONES EN consorcio.persona_unidad_funcional (ESTÁTICO) - (Lógica sin cambios)
+        -- 4. INSERTAR RELACIONES EN consorcio.persona_unidad_funcional (ESTÁTICO)
         INSERT INTO consorcio.persona_unidad_funcional (idPersona, idUnidadFuncional, rol)
         SELECT
             p.idPersona,
             uf.idUnidadFuncional,
-            -- Determinar el rol
+            -- ASIGNACIÓN DE ROL SIMPLE CON COMPARACIÓN NUMÉRICA (1 para inquilino, 0 para propietario)
             CASE  
-                WHEN LOWER(LTRIM(RTRIM(t.Col7_Inquilino))) IN ('si', '1', 'true') THEN 'inquilino'
+                WHEN t.Col7_Inquilino = 1 THEN 'inquilino'
                 ELSE 'propietario'
             END AS rol
-        FROM #temporal t   
+        FROM #temporal t      
         
-        INNER JOIN consorcio.persona p 
+        INNER JOIN consorcio.persona p  
             ON p.dni = CAST(LTRIM(RTRIM(t.Col3_DNI)) AS INT)
         
-        INNER JOIN consorcio.unidad_funcional uf 
+        INNER JOIN consorcio.unidad_funcional uf
             ON uf.cuentaOrigen = LTRIM(RTRIM(t.Col6_CuentaOrigen))
         
         -- FILTRO DE DNI Y VALIDACIÓN DE EXISTENCIA DE RELACIÓN
@@ -268,8 +261,9 @@ BEGIN
                 SELECT 1 
                 FROM consorcio.persona_unidad_funcional puf
                 WHERE puf.idUnidadFuncional = uf.idUnidadFuncional
+                -- Lógica de deduplicación también usa la comparación numérica simple
                 AND puf.rol = CASE  
-                                  WHEN LOWER(LTRIM(RTRIM(t.Col7_Inquilino))) IN ('si', '1', 'true') THEN 'inquilino'
+                                  WHEN t.Col7_Inquilino = 1 THEN 'inquilino'
                                   ELSE 'propietario'
                               END
             );
@@ -283,7 +277,7 @@ BEGIN
         IF OBJECT_ID('tempdb..#temporal') IS NOT NULL
             DROP TABLE #temporal;
             
-        SELECT 'Importación de datos de persona y relaciones completada con éxito.' AS Resultado;
+        SELECT 'Importación de datos de persona y relaciones completada con éxito. La columna Inquilino se cargó como DECIMAL(2, 0), permitiendo una asignación de rol simple: **1 = inquilino, 0 = propietario**.' AS Resultado;
 
     END TRY
     BEGIN CATCH
