@@ -136,12 +136,12 @@ CREATE TABLE consorcio.pago(
 CREATE TABLE consorcio.expensa(
     idExpensa INT IDENTITY (1,1) PRIMARY KEY,
     idConsorcio INT NOT NULL, 
-    idPersona INT NOT NULL,
-    idUnidadFuncional INT NOT NULL,
+    periodo VARCHAR(12) NOT NULL,
+    anio INT NOT NULL,
 
     CONSTRAINT fk_expensa_consorcio FOREIGN KEY (idConsorcio) REFERENCES consorcio.consorcio (idConsorcio),
-    CONSTRAINT fk_expensa_persona FOREIGN KEY (idPersona) REFERENCES consorcio.persona (idPersona),
-    CONSTRAINT fk_expensa_unidadFuncional FOREIGN KEY (idUnidadFuncional) REFERENCES consorcio.unidad_funcional (idUnidadFuncional)
+    CONSTRAINT chk_expensa_periodo CHECK (periodo IN('enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre')),
+    CONSTRAINT uq_expensa_cierre UNIQUE (idConsorcio, periodo, anio)
 );
 
 CREATE TABLE consorcio.detalle_expensa (
@@ -176,12 +176,10 @@ CREATE TABLE consorcio.detalle_expensa (
 CREATE TABLE consorcio.gasto (
     idGasto INT IDENTITY(1,1),
     idExpensa INT NOT NULL,
-    periodo VARCHAR(12) NOT NULL,
     subTotalOrdinarios DECIMAL(12,2) NOT NULL,
     subTotalExtraOrd DECIMAL(12,2) NOT NULL,
 
     CONSTRAINT pk_gasto PRIMARY KEY (idGasto),
-    CONSTRAINT chk_periodo_gasto CHECK (periodo IN('enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre')),
     CONSTRAINT chk_subTotalOrd_gasto CHECK (subTotalOrdinarios >= 0),
     CONSTRAINT chk_subTotalExtraOrd_gasto CHECK (subTotalExtraOrd >= 0),
     CONSTRAINT fk_gasto_expensa FOREIGN KEY (idExpensa) REFERENCES consorcio.expensa(idExpensa)
