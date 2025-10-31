@@ -148,7 +148,7 @@ CREATE TABLE consorcio.detalle_expensa (
     idDetalleExpensa INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
     idExpensa INT NOT NULL,
     idUnidadFuncional INT NOT NULL,
-    idPago INT NOT NULL,
+    idPago INT NULL,
     fechaEmision DATE NOT NULL DEFAULT GETDATE(),
     fechaPrimerVenc DATE NOT NULL,
     fechaSegundoVenc DATE,
@@ -163,13 +163,13 @@ CREATE TABLE consorcio.detalle_expensa (
     CONSTRAINT fk_detalleExpensa_expensa FOREIGN KEY (idExpensa) REFERENCES consorcio.expensa(idExpensa),
     CONSTRAINT fk_detalleExpensa_unidadFuncional FOREIGN KEY (idUnidadFuncional) REFERENCES consorcio.unidad_funcional(idUnidadFuncional),
     CONSTRAINT fk_detalleExpensa_pago FOREIGN KEY (idPago) REFERENCES consorcio.pago(idPago),
+    CONSTRAINT uq_detalle_expensa_unica UNIQUE (idExpensa, idUnidadFuncional),
     CONSTRAINT chk_detalleExpensa_fechaPrimerVenc CHECK (fechaPrimerVenc > fechaEmision),
     CONSTRAINT chk_detalleExpensa_fechaSegundoVenc CHECK (fechaSegundoVenc IS NULL OR fechaSegundoVenc > fechaPrimerVenc),
-    CONSTRAINT chk_detalleExpensa_pagoRecibidos CHECK (pagoRecibido > 0),
-    CONSTRAINT chk_detalleExpensa_deuda CHECK (deuda > 0),
-    CONSTRAINT chk_detalleExpensa_interesPorMora CHECK (interesPorMora > 0),
-    CONSTRAINT chk_detalleExpensa_expensasOrdinarias CHECK (expensasOrdinarias > 0),
-    CONSTRAINT chk_detalleExpensa_expensasExtraOrdinarias CHECK (expensasExtraOrdinarias > 0),
+    CONSTRAINT chk_detalleExpensa_pagoRecibidos CHECK (pagoRecibido >= 0),
+    CONSTRAINT chk_detalleExpensa_interesPorMora CHECK (interesPorMora >= 0),
+    CONSTRAINT chk_detalleExpensa_expensasOrdinarias CHECK (expensasOrdinarias >= 0),
+    CONSTRAINT chk_detalleExpensa_expensasExtraOrdinarias CHECK (expensasExtraOrdinarias >= 0),
     CONSTRAINT chk_detalleExpensa_totalAPagar CHECK (totalAPagar >= 0)
 );
 
