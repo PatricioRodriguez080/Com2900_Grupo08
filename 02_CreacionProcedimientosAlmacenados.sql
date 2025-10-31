@@ -108,162 +108,202 @@ CREATE OR ALTER PROCEDURE consorcio.SP_importar_personas
     @path NVARCHAR(255)
 AS
 BEGIN
-    DECLARE @sqlQuery NVARCHAR(MAX);
-
+    -- Declaración de variables necesarias
+    DECLARE @sqlBulkInsert NVARCHAR(MAX);
+    DECLARE @ErrorMessage NVARCHAR(4000);
+    DECLARE @ErrorSeverity INT;
+    DECLARE @ErrorState INT;
+    
+    -- Iniciar la transacción para asegurar atomicidad
+    BEGIN TRANSACTION
+    
     BEGIN TRY
-        SET @sqlQuery = '
-            -- 1. CREAR TABLA TEMPORAL
-            IF OBJECT_ID(''tempdb..#temporal'') IS NOT NULL
-                DROP TABLE #temporal;
+        
+        -- 1. CREAR TABLA TEMPORAL (ESTÁTICO)
+        IF OBJECT_ID('tempdb..#temporal') IS NOT NULL
+            DROP TABLE #temporal;
             
-            CREATE TABLE #temporal (
-                Col1_Nombre         VARCHAR(100),
-                Col2_Apellido       VARCHAR(100),
-                Col3_DNI            VARCHAR(50),
-                Col4_Email          VARCHAR(100),
-                Col5_Telefono       VARCHAR(50),
-                Col6_CuentaOrigen   CHAR(22),
-                Col7_Inquilino      VARCHAR(10)
-            );
-            
-            -- 2. CARGAR CSV
+        CREATE TABLE #temporal (
+            Col1_Nombre         VARCHAR(100),
+            Col2_Apellido       VARCHAR(100),
+            Col3_DNI            VARCHAR(50),
+            Col4_Email          VARCHAR(100),
+            Col5_Telefono       VARCHAR(50),
+            Col6_CuentaOrigen   CHAR(22),
+            Col7_Inquilino      VARCHAR(10)
+        );
+        
+        ---
+        
+        -- 2. CARGAR CSV (ÚNICO BLOQUE DINÁMICO)
+        SET @sqlBulkInsert = '
             BULK INSERT #temporal
             FROM ''' + @path + '''
             WITH (
                 FIELDTERMINATOR = '';'',
                 ROWTERMINATOR = ''0x0A'',
                 FIRSTROW = 2,
-                CODEPAGE = ''65001''
+                CODEPAGE = ''1252''
             );
+        ';
+        
+        EXEC sp_executesql @sqlBulkInsert;
 
-            -- 3. INSERTAR EN consorcio.persona (con limpieza y validación de DNI)
-            INSERT INTO consorcio.persona (
-                nombre,
-                apellido,
-                dni,
-                email,
-                telefono,
-                cuentaOrigen
-            )
-            SELECT
-                -- Limpieza de Nombre
+        ---
+        
+        -- 3. INSERTAR EN consorcio.persona (ESTÁTICO)
+        WITH DatosLimpios AS (
+            SELECT 
+                -- Limpieza de Nombre: PRIMERO reemplazos, LUEGO capitalización
                 RTRIM(
                     (
-                        SELECT 
-                            UPPER(LEFT(value,1)) + LOWER(SUBSTRING(value,2,LEN(value))) + '' ''
-                        FROM STRING_SPLIT(LTRIM(RTRIM(t.Col1_Nombre)), '' '')
-                        FOR XML PATH(''''), TYPE
-                    ).value(''.'', ''NVARCHAR(MAX)'')
+                        SELECT  
+                            UPPER(LEFT(value, 1)) + LOWER(SUBSTRING(value, 2, LEN(value))) + ' '
+                        FROM STRING_SPLIT(
+                            LTRIM(RTRIM(
+                                REPLACE(REPLACE(REPLACE(t.Col1_Nombre, '‚', 'é'), '¥', 'ñ'), '¡', 'í') -- << REEMPLAZOS APLICADOS
+                            )), ' '
+                        )
+                        FOR XML PATH(''), TYPE
+                    ).value('.', 'NVARCHAR(MAX)')
                 ) AS nombre,
 
-                -- Limpieza de Apellido
+                -- Limpieza de Apellido: PRIMERO reemplazos, LUEGO capitalización
                 RTRIM(
                     (
-                        SELECT 
-                            UPPER(LEFT(value,1)) + LOWER(SUBSTRING(value,2,LEN(value))) + '' ''
-                        FROM STRING_SPLIT(LTRIM(RTRIM(t.Col2_Apellido)), '' '')
-                        FOR XML PATH(''''), TYPE
-                    ).value(''.'', ''NVARCHAR(MAX)'')
+                        SELECT  
+                            UPPER(LEFT(value, 1)) + LOWER(SUBSTRING(value, 2, LEN(value))) + ' '
+                        FROM STRING_SPLIT(
+                            LTRIM(RTRIM(
+                                REPLACE(REPLACE(REPLACE(t.Col2_Apellido, '‚', 'é'), '¥', 'ñ'), '¡', 'í') -- << REEMPLAZOS APLICADOS
+                            )), ' '
+                        )
+                        FOR XML PATH(''), TYPE
+                    ).value('.', 'NVARCHAR(MAX)')
                 ) AS apellido,
 
                 -- DNI en entero
                 CAST(LTRIM(RTRIM(t.Col3_DNI)) AS INT) AS dni,
 
-                -- Email limpiado
+                -- Email limpiado: PRIMERO reemplazos, LUEGO a minúsculas y limpieza de espacios/caracteres
                 LOWER(
                     REPLACE(
                         REPLACE(
                             REPLACE(
-                                REPLACE(
-                                    LTRIM(RTRIM(t.Col4_Email)),
-                                    '' '', '' ''
-                                ),
-                                '' '', ''_'' 
+                                LTRIM(RTRIM(
+                                    REPLACE(REPLACE(REPLACE(t.Col4_Email, '‚', 'é'), '¥', 'ñ'), '¡', 'í') -- << REEMPLAZOS APLICADOS
+                                )),
+                                ' ', '_'
                             ),
-                            ''__'', ''_'' 
+                            '__', '_'
                         ),
-                        ''_@'', ''@''
+                        '_@', '@'
                     )
                 ) AS email,
 
                 -- Teléfono y cuenta origen
                 LTRIM(RTRIM(t.Col5_Telefono)) AS telefono,
-                LTRIM(RTRIM(t.Col6_CuentaOrigen)) AS cuentaOrigen
+                LTRIM(RTRIM(t.Col6_CuentaOrigen)) AS cuentaOrigen,
+                
+                -- Campo Inquilino
+                LOWER(LTRIM(RTRIM(t.Col7_Inquilino))) AS inquilino_raw,
+
+                -- Deduplicación
+                ROW_NUMBER() OVER (PARTITION BY t.Col3_DNI ORDER BY t.Col1_Nombre) as rn
             FROM #temporal t
             WHERE 
                 -- 1. Asegurar que el DNI sea numérico y no vacío
                 ISNUMERIC(LTRIM(RTRIM(t.Col3_DNI))) = 1
-                AND LTRIM(RTRIM(t.Col3_DNI)) <> '''' 
-                
-                -- 2. Evitar duplicados en la tabla destino (consorcio.persona)
-                AND NOT EXISTS (
-                    SELECT 1 
-                    FROM consorcio.persona p 
-                    WHERE p.dni = CAST(LTRIM(RTRIM(t.Col3_DNI)) AS INT)
-                )
-                
-                -- 3. Evitar duplicados DENTRO DEL ARCHIVO (solo cargar el primer registro encontrado para cada DNI)
-                -- Se usa el nombre como desempate simple.
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM #temporal t_duplicado
-                    WHERE 
-                        t_duplicado.Col3_DNI = t.Col3_DNI
-                        AND t_duplicado.Col1_Nombre < t.Col1_Nombre 
-                );
-
-            -- 4. INSERTAR RELACIONES EN consorcio.persona_unidad_funcional
-            -- Se usa MERGE para manejar el rol (propietario/inquilino) y la clave primaria compuesta (idUnidadFuncional, rol)
-            INSERT INTO consorcio.persona_unidad_funcional (idPersona, idUnidadFuncional, rol)
-            SELECT
-                p.idPersona,
-                uf.idUnidadFuncional,
-                -- Determinar el rol: Si Col7_Inquilino es ''si'', el rol es ''inquilino'', sino es ''propietario''.
-                CASE 
-                    WHEN LOWER(LTRIM(RTRIM(t.Col7_Inquilino))) IN (''si'', ''1'', ''true'') THEN ''inquilino''
-                    ELSE ''propietario''
-                END AS rol
-            FROM #temporal t
-            -- JOIN con persona (recién insertada o ya existente)
-            INNER JOIN consorcio.persona p ON p.dni = CAST(LTRIM(RTRIM(t.Col3_DNI)) AS INT)
-            -- JOIN con unidad_funcional
-            INNER JOIN consorcio.unidad_funcional uf ON uf.cuentaOrigen = LTRIM(RTRIM(t.Col6_CuentaOrigen))
-            WHERE
-                -- Asegurarse de que el DNI sea válido (ya se verificó en el paso 3)
-                ISNUMERIC(LTRIM(RTRIM(t.Col3_DNI))) = 1
-                AND LTRIM(RTRIM(t.Col3_DNI)) <> '''' 
+                AND LTRIM(RTRIM(t.Col3_DNI)) <> ''
+        )
+        
+        INSERT INTO consorcio.persona (
+            nombre, apellido, dni, email, telefono, cuentaOrigen
+        )
+        SELECT 
+            dl.nombre, dl.apellido, dl.dni, dl.email, dl.telefono, dl.cuentaOrigen
+        FROM DatosLimpios dl
+        WHERE
+            -- 1. Eliminar duplicados internos
+            dl.rn = 1
             
-            -- Excluir aquellas relaciones que YA existen en la tabla (PK: idUnidadFuncional, rol)
+            -- 2. Evitar duplicados en la tabla destino
+            AND NOT EXISTS (
+                SELECT 1 
+                FROM consorcio.persona p 
+                WHERE p.dni = dl.dni
+            );
+
+        ---
+        
+        -- 4. INSERTAR RELACIONES EN consorcio.persona_unidad_funcional (ESTÁTICO) - (Lógica sin cambios)
+        INSERT INTO consorcio.persona_unidad_funcional (idPersona, idUnidadFuncional, rol)
+        SELECT
+            p.idPersona,
+            uf.idUnidadFuncional,
+            -- Determinar el rol
+            CASE  
+                WHEN LOWER(LTRIM(RTRIM(t.Col7_Inquilino))) IN ('si', '1', 'true') THEN 'inquilino'
+                ELSE 'propietario'
+            END AS rol
+        FROM #temporal t   
+        
+        INNER JOIN consorcio.persona p 
+            ON p.dni = CAST(LTRIM(RTRIM(t.Col3_DNI)) AS INT)
+        
+        INNER JOIN consorcio.unidad_funcional uf 
+            ON uf.cuentaOrigen = LTRIM(RTRIM(t.Col6_CuentaOrigen))
+        
+        -- FILTRO DE DNI Y VALIDACIÓN DE EXISTENCIA DE RELACIÓN
+        WHERE 
+            ISNUMERIC(LTRIM(RTRIM(t.Col3_DNI))) = 1 AND LTRIM(RTRIM(t.Col3_DNI)) <> ''
+            
             AND NOT EXISTS (
                 SELECT 1 
                 FROM consorcio.persona_unidad_funcional puf
                 WHERE puf.idUnidadFuncional = uf.idUnidadFuncional
-                AND puf.rol = CASE 
-                                WHEN LOWER(LTRIM(RTRIM(t.Col7_Inquilino))) IN (''si'', ''1'', ''true'') THEN ''inquilino''
-                                ELSE ''propietario''
+                AND puf.rol = CASE  
+                                  WHEN LOWER(LTRIM(RTRIM(t.Col7_Inquilino))) IN ('si', '1', 'true') THEN 'inquilino'
+                                  ELSE 'propietario'
                               END
             );
-
-            -- 5. LIMPIEZA
-            IF OBJECT_ID(''tempdb..#temporal'') IS NOT NULL
-                DROP TABLE #temporal;
-        ';
-
-        EXEC sp_executesql @sqlQuery;
+        
+        ---
+        
+        -- 5. ÉXITO Y COMMIT
+        COMMIT TRANSACTION
+        
+        -- 6. LIMPIEZA DE TABLA TEMPORAL
+        IF OBJECT_ID('tempdb..#temporal') IS NOT NULL
+            DROP TABLE #temporal;
+            
         SELECT 'Importación de datos de persona y relaciones completada con éxito.' AS Resultado;
+
     END TRY
     BEGIN CATCH
-        SELECT
-            'Error al importar los datos. La tabla temporal fue limpiada.' AS Resultado,
-            ERROR_NUMBER() AS ErrorNumber,
-            ERROR_MESSAGE() AS ErrorMessage,
-            ERROR_LINE() AS ErrorLine;
+        
+        -- 5. MANEJO DE ERROR Y ROLLBACK
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
 
-        SET @sqlQuery = 'IF OBJECT_ID(''tempdb..#temporal'') IS NOT NULL DROP TABLE #temporal;';
-        EXEC sp_executesql @sqlQuery;
+        SELECT 
+            @ErrorMessage = ERROR_MESSAGE(), 
+            @ErrorSeverity = ERROR_SEVERITY(), 
+            @ErrorState = ERROR_STATE();
+
+        -- 6. LIMPIEZA DE TABLA TEMPORAL EN CASO DE ERROR
+        IF OBJECT_ID('tempdb..#temporal') IS NOT NULL
+            DROP TABLE #temporal;
+            
+        SELECT
+            'Error al importar los datos. La tabla temporal fue limpiada y la transacción revertida.' AS Resultado,
+            ERROR_NUMBER() AS ErrorNumber,
+            @ErrorMessage AS ErrorMessage,
+            ERROR_LINE() AS ErrorLine;
 
         THROW;
         RETURN 1;
+
     END CATCH
 
     RETURN 0;
