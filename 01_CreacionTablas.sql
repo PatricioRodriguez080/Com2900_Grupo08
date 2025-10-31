@@ -163,6 +163,7 @@ CREATE TABLE consorcio.detalle_expensa (
     CONSTRAINT fk_detalleExpensa_expensa FOREIGN KEY (idExpensa) REFERENCES consorcio.expensa(idExpensa),
     CONSTRAINT fk_detalleExpensa_unidadFuncional FOREIGN KEY (idUnidadFuncional) REFERENCES consorcio.unidad_funcional(idUnidadFuncional),
     CONSTRAINT fk_detalleExpensa_pago FOREIGN KEY (idPago) REFERENCES consorcio.pago(idPago),
+    CONSTRAINT uq_detalle_expensa_unica UNIQUE (idExpensa, idUnidadFuncional),
     CONSTRAINT chk_detalleExpensa_fechaPrimerVenc CHECK (fechaPrimerVenc > fechaEmision),
     CONSTRAINT chk_detalleExpensa_fechaSegundoVenc CHECK (fechaSegundoVenc IS NULL OR fechaSegundoVenc > fechaPrimerVenc),
     CONSTRAINT chk_detalleExpensa_pagoRecibidos CHECK (pagoRecibido >= 0),
@@ -175,12 +176,10 @@ CREATE TABLE consorcio.detalle_expensa (
 CREATE TABLE consorcio.gasto (
     idGasto INT IDENTITY(1,1),
     idExpensa INT NOT NULL,
-    periodo VARCHAR(12) NOT NULL,
     subTotalOrdinarios DECIMAL(12,2) NOT NULL,
     subTotalExtraOrd DECIMAL(12,2) NOT NULL,
 
     CONSTRAINT pk_gasto PRIMARY KEY (idGasto),
-    CONSTRAINT chk_periodo_gasto CHECK (periodo IN('enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre')),
     CONSTRAINT chk_subTotalOrd_gasto CHECK (subTotalOrdinarios >= 0),
     CONSTRAINT chk_subTotalExtraOrd_gasto CHECK (subTotalExtraOrd >= 0),
     CONSTRAINT fk_gasto_expensa FOREIGN KEY (idExpensa) REFERENCES consorcio.expensa(idExpensa)
