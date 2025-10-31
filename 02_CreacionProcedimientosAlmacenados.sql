@@ -136,7 +136,7 @@ BEGIN
                 CODEPAGE = ''65001''
             );
 
-            -- 3. INSERTAR EN TABLA FINAL (con limpieza y validación)
+            -- 3. INSERTAR EN consorcio.persona (con limpieza y validación de DNI)
             INSERT INTO consorcio.persona (
                 nombre,
                 apellido,
@@ -145,29 +145,29 @@ BEGIN
                 telefono,
                 cuentaOrigen
             )
-            SELECT DISTINCT
-                -- Nombre: primera letra de cada palabra en mayúscula, conservando espacios
+            SELECT
+                -- Limpieza de Nombre
                 RTRIM(
                     (
                         SELECT 
                             UPPER(LEFT(value,1)) + LOWER(SUBSTRING(value,2,LEN(value))) + '' ''
-                        FROM STRING_SPLIT(LTRIM(RTRIM(Col1_Nombre)), '' '')
+                        FROM STRING_SPLIT(LTRIM(RTRIM(t.Col1_Nombre)), '' '')
                         FOR XML PATH(''''), TYPE
                     ).value(''.'', ''NVARCHAR(MAX)'')
                 ) AS nombre,
 
-                -- Apellido: primera letra de cada palabra en mayúscula, conservando espacios
+                -- Limpieza de Apellido
                 RTRIM(
                     (
                         SELECT 
                             UPPER(LEFT(value,1)) + LOWER(SUBSTRING(value,2,LEN(value))) + '' ''
-                        FROM STRING_SPLIT(LTRIM(RTRIM(Col2_Apellido)), '' '')
+                        FROM STRING_SPLIT(LTRIM(RTRIM(t.Col2_Apellido)), '' '')
                         FOR XML PATH(''''), TYPE
                     ).value(''.'', ''NVARCHAR(MAX)'')
                 ) AS apellido,
 
                 -- DNI en entero
-                CAST(LTRIM(RTRIM(Col3_DNI)) AS INT) AS dni,
+                CAST(LTRIM(RTRIM(t.Col3_DNI)) AS INT) AS dni,
 
                 -- Email limpiado
                 LOWER(
@@ -175,8 +175,8 @@ BEGIN
                         REPLACE(
                             REPLACE(
                                 REPLACE(
-                                    LTRIM(RTRIM(Col4_Email)),
-                                    ''  '', '' ''
+                                    LTRIM(RTRIM(t.Col4_Email)),
+                                    '' '', '' ''
                                 ),
                                 '' '', ''_'' 
                             ),
@@ -186,36 +186,71 @@ BEGIN
                     )
                 ) AS email,
 
-                -- Teléfono y cuenta origen normales
-                LTRIM(RTRIM(Col5_Telefono)) AS telefono,
-
-                CAST(
-                    LEFT(
-                        REPLACE(
-                            REPLACE(LTRIM(RTRIM(Col6_CuentaOrigen)), '','', ''''),
-                        ''E+21'', '''')
-                         + REPLICATE(''0'',22),
-                    22) AS CHAR(22)
-                ) AS cuentaOrigen
-
+                -- Teléfono y cuenta origen
+                LTRIM(RTRIM(t.Col5_Telefono)) AS telefono,
+                LTRIM(RTRIM(t.Col6_CuentaOrigen)) AS cuentaOrigen
             FROM #temporal t
             WHERE 
-                -- Evitar duplicados en la tabla destino
-                NOT EXISTS (
+                -- 1. Asegurar que el DNI sea numérico y no vacío
+                ISNUMERIC(LTRIM(RTRIM(t.Col3_DNI))) = 1
+                AND LTRIM(RTRIM(t.Col3_DNI)) <> '''' 
+                
+                -- 2. Evitar duplicados en la tabla destino (consorcio.persona)
+                AND NOT EXISTS (
                     SELECT 1 
                     FROM consorcio.persona p 
                     WHERE p.dni = CAST(LTRIM(RTRIM(t.Col3_DNI)) AS INT)
                 )
-                AND ISNUMERIC(LTRIM(RTRIM(t.Col3_DNI))) = 1
-                AND LTRIM(RTRIM(t.Col3_DNI)) <> '''';  -- Evitar DNIs vacíos
+                
+                -- 3. Evitar duplicados DENTRO DEL ARCHIVO (solo cargar el primer registro encontrado para cada DNI)
+                -- Se usa el nombre como desempate simple.
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM #temporal t_duplicado
+                    WHERE 
+                        t_duplicado.Col3_DNI = t.Col3_DNI
+                        AND t_duplicado.Col1_Nombre < t.Col1_Nombre 
+                );
 
-            -- 4. LIMPIEZA
+            -- 4. INSERTAR RELACIONES EN consorcio.persona_unidad_funcional
+            -- Se usa MERGE para manejar el rol (propietario/inquilino) y la clave primaria compuesta (idUnidadFuncional, rol)
+            INSERT INTO consorcio.persona_unidad_funcional (idPersona, idUnidadFuncional, rol)
+            SELECT
+                p.idPersona,
+                uf.idUnidadFuncional,
+                -- Determinar el rol: Si Col7_Inquilino es ''si'', el rol es ''inquilino'', sino es ''propietario''.
+                CASE 
+                    WHEN LOWER(LTRIM(RTRIM(t.Col7_Inquilino))) IN (''si'', ''1'', ''true'') THEN ''inquilino''
+                    ELSE ''propietario''
+                END AS rol
+            FROM #temporal t
+            -- JOIN con persona (recién insertada o ya existente)
+            INNER JOIN consorcio.persona p ON p.dni = CAST(LTRIM(RTRIM(t.Col3_DNI)) AS INT)
+            -- JOIN con unidad_funcional
+            INNER JOIN consorcio.unidad_funcional uf ON uf.cuentaOrigen = LTRIM(RTRIM(t.Col6_CuentaOrigen))
+            WHERE
+                -- Asegurarse de que el DNI sea válido (ya se verificó en el paso 3)
+                ISNUMERIC(LTRIM(RTRIM(t.Col3_DNI))) = 1
+                AND LTRIM(RTRIM(t.Col3_DNI)) <> '''' 
+            
+            -- Excluir aquellas relaciones que YA existen en la tabla (PK: idUnidadFuncional, rol)
+            AND NOT EXISTS (
+                SELECT 1 
+                FROM consorcio.persona_unidad_funcional puf
+                WHERE puf.idUnidadFuncional = uf.idUnidadFuncional
+                AND puf.rol = CASE 
+                                WHEN LOWER(LTRIM(RTRIM(t.Col7_Inquilino))) IN (''si'', ''1'', ''true'') THEN ''inquilino''
+                                ELSE ''propietario''
+                              END
+            );
+
+            -- 5. LIMPIEZA
             IF OBJECT_ID(''tempdb..#temporal'') IS NOT NULL
                 DROP TABLE #temporal;
         ';
 
         EXEC sp_executesql @sqlQuery;
-        SELECT 'Importación de datos de persona completada con éxito.' AS Resultado;
+        SELECT 'Importación de datos de persona y relaciones completada con éxito.' AS Resultado;
     END TRY
     BEGIN CATCH
         SELECT
@@ -329,7 +364,7 @@ BEGIN
 END;
 GO
 
-
+----------------------- Archivo importar_unidades_funcionales.csv --------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_unidades_funcionales_csv
     @path NVARCHAR(255) -- Ruta a Inquilino-propietarios-UF.csv
 AS
