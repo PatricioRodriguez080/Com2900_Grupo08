@@ -419,7 +419,7 @@ GO
 -- PROCEDIMIENTO: Importar cuentas origen para las UF ya creadas
 --------------------------------------------------------------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_unidades_funcionales_csv
-    @path NVARCHAR(255)
+    @path NVARCHAR(255) -- Ruta a Inquilino-propietarios-UF.csv
 AS
 BEGIN
     SET NOCOUNT ON;
