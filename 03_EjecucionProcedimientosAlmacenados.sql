@@ -24,7 +24,7 @@ SELECT * FROM consorcio.consorcio;
 
 --------------------------------------------------------------------------------
 -- ARCHIVO: inquilino-propietarios-datos.csv
--- PROCEDIMIENTO: Importar personas
+-- PROCEDIMIENTO: Importar personas y su relacion con las unidades funcionales (persona_unidad_funcional)
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_importar_personas @path = 'C:\Archivos para el TP\Inquilino-propietarios-datos.csv';
 
