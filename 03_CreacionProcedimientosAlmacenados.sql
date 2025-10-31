@@ -9,7 +9,7 @@ Integrantes:
     Rodriguez Arrien, Juan Manuel 44259478
     Rodriguez, Patricio 45683229
     Ruiz, Leonel Emiliano 45537914
-Enunciado:       "02 - Creación de Procedimientos Almacenados"
+Enunciado:       "03 - Creación de Procedimientos Almacenados"
 ===============================================================================
 */
 
