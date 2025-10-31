@@ -15,6 +15,7 @@ Enunciado:       "02 - Creación de Procedimientos Almacenados"
 
 
 --------------------------------------------------------------------------------
+-- NUMERO: 1
 -- ARCHIVO: datos varios.xlsx
 -- PROCEDIMIENTO: Importar consorcios
 --------------------------------------------------------------------------------
@@ -106,9 +107,170 @@ BEGIN
 END;
 GO
 
+
 --------------------------------------------------------------------------------
+-- NUMERO: 2
+-- ARCHIVO: UF por consorcio.txt
+-- PROCEDIMIENTO: Importar unidades funcionales, cocheras y bauleras
+-- CONSIDERACIONES: Sin cuenta origen asociada (se carga en el siguiente)
+--------------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE consorcio.SP_importar_unidades_funcionales
+    @path NVARCHAR(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    BEGIN TRY
+        IF OBJECT_ID('tempdb..#TempUF') IS NOT NULL
+            DROP TABLE #TempUF;
+        CREATE TABLE #TempUF (
+            nombreConsorcio NVARCHAR(100),
+            numeroUnidadFuncional NVARCHAR(10),
+            piso CHAR(2),
+            departamento CHAR(1),
+            coeficiente NVARCHAR(10),
+            metrosCuadrados NVARCHAR(10),
+            bauleras NVARCHAR(2),
+            cochera NVARCHAR(2),
+            m2_baulera NVARCHAR(10),
+            m2_cochera NVARCHAR(10)
+        );
+
+        DECLARE @sql NVARCHAR(MAX);
+        SET @sql = N'
+            BULK INSERT #TempUF
+            FROM ''' + @path + N'''
+            WITH (
+                FIRSTROW = 2,
+                FIELDTERMINATOR = ''\t'',
+                ROWTERMINATOR = ''\n'',
+                CODEPAGE = ''65001'',
+                DATAFILETYPE = ''char''
+            );';
+        EXEC sp_executesql @sql;
+
+        INSERT INTO consorcio.unidad_funcional
+            (idConsorcio, cuentaOrigen, numeroUnidadFuncional, piso, departamento, coeficiente, metrosCuadrados)
+        SELECT
+            c.idConsorcio,
+            ROW_NUMBER() OVER(PARTITION BY c.idConsorcio ORDER BY t.numeroUnidadFuncional) AS cuentaOrigen,
+            TRY_CAST(t.numeroUnidadFuncional AS INT),
+            t.piso,
+            t.departamento,
+            TRY_CAST(REPLACE(t.coeficiente, ',', '.') AS DECIMAL(5,2)),
+            TRY_CAST(t.metrosCuadrados AS INT)
+        FROM #TempUF t
+        INNER JOIN consorcio.consorcio c
+            ON LTRIM(RTRIM(c.nombre)) = LTRIM(RTRIM(t.nombreConsorcio))
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM consorcio.unidad_funcional uf
+            WHERE uf.idConsorcio = c.idConsorcio
+              AND uf.piso = t.piso
+              AND uf.departamento = t.departamento
+        );
+
+        INSERT INTO consorcio.cochera (idUnidadFuncional, metrosCuadrados, coeficiente)
+        SELECT
+            uf.idUnidadFuncional,
+            TRY_CAST(REPLACE(t.m2_cochera, ',', '.') AS INT),
+            TRY_CAST(REPLACE(t.coeficiente, ',', '.') AS DECIMAL(5,2))
+        FROM #TempUF t
+        INNER JOIN consorcio.consorcio c
+            ON LTRIM(RTRIM(c.nombre)) = LTRIM(RTRIM(t.nombreConsorcio))
+        INNER JOIN consorcio.unidad_funcional uf
+            ON uf.idConsorcio = c.idConsorcio
+           AND uf.piso = t.piso
+           AND uf.departamento = t.departamento
+        WHERE t.cochera = 'SI' AND TRY_CAST(REPLACE(t.m2_cochera, ',', '.') AS INT) > 0;
+
+        INSERT INTO consorcio.baulera (idUnidadFuncional, metrosCuadrados, coeficiente)
+        SELECT
+            uf.idUnidadFuncional,
+            TRY_CAST(REPLACE(t.m2_baulera, ',', '.') AS INT),
+            TRY_CAST(REPLACE(t.coeficiente, ',', '.') AS DECIMAL(5,2))
+        FROM #TempUF t
+        INNER JOIN consorcio.consorcio c
+            ON LTRIM(RTRIM(c.nombre)) = LTRIM(RTRIM(t.nombreConsorcio))
+        INNER JOIN consorcio.unidad_funcional uf
+            ON uf.idConsorcio = c.idConsorcio
+           AND uf.piso = t.piso
+           AND uf.departamento = t.departamento
+        WHERE t.bauleras = 'SI' AND TRY_CAST(REPLACE(t.m2_baulera, ',', '.') AS INT) > 0;
+
+        DROP TABLE #TempUF;
+
+    END TRY
+    BEGIN CATCH
+        PRINT ERROR_MESSAGE();
+    END CATCH
+END;
+GO
+
+--------------------------------------------------------------------------------
+-- NUMERO: 3
+-- ARCHIVO: inquilino-propietarios-UF.csv
+-- PROCEDIMIENTO: Importar cuentas origen para las UF ya creadas
+--------------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE consorcio.SP_importar_unidades_funcionales_csv
+    @path NVARCHAR(255) -- Ruta a Inquilino-propietarios-UF.csv
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- 1. Crear tabla temporal de staging
+    IF OBJECT_ID('tempdb..#tempUF_CSV', 'U') IS NOT NULL
+        DROP TABLE #tempUF_CSV;
+
+    CREATE TABLE #tempUF_CSV (
+        stg_cvu_cbu            NVARCHAR(50),
+        stg_nombre_consorcio   NVARCHAR(50),
+        stg_nroUnidadFuncional NVARCHAR(10),
+        stg_piso               NVARCHAR(10),
+        stg_departamento       NVARCHAR(10)
+    );
+
+    -- 2. Cargar datos del CSV
+    DECLARE @BulkSqlCmd NVARCHAR(MAX);
+    SET @BulkSqlCmd = N'
+        BULK INSERT #tempUF_CSV
+        FROM ''' + @path + '''
+        WITH
+        (
+            FIELDTERMINATOR = ''|'',
+            ROWTERMINATOR = ''\n'',
+            CODEPAGE = ''ACP'',
+            FIRSTROW = 2
+        );
+    ';
+    EXEC sp_executesql @BulkSqlCmd;
+
+    -- 3. ACTUALIZAR la tabla final
+    UPDATE uf
+    SET
+        -- Actualizamos la cuentaOrigen con el CVU/CBU del archivo
+        uf.cuentaOrigen = CAST(TRIM(t.stg_cvu_cbu) AS CHAR(22))
+    FROM
+        consorcio.unidad_funcional AS uf
+    INNER JOIN
+        consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio
+    INNER JOIN
+        #tempUF_CSV AS t ON 
+            TRIM(t.stg_nombre_consorcio) = c.nombre
+            AND TRIM(t.stg_piso) = uf.piso
+            AND TRIM(t.stg_departamento) = uf.departamento
+    WHERE
+        -- Solo actualizamos las que tienen la cuentaOrigen incorrecta (ROW_NUMBER)
+        ISNUMERIC(uf.cuentaOrigen) = 1 AND uf.cuentaOrigen != CAST(TRIM(t.stg_cvu_cbu) AS CHAR(22));
+    
+    DROP TABLE #tempUF_CSV;
+END;
+GO
+
+--------------------------------------------------------------------------------
+-- NUMERO: 4
 -- ARCHIVO: inquilino-propietarios-datos.csv
--- PROCEDIMIENTO: Importar personas
+-- PROCEDIMIENTO: Importar personas y su relacion con las unidades funcionales (persona_unidad_funcional)
 --------------------------------------------------------------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_personas
     @path NVARCHAR(255)
@@ -311,163 +473,7 @@ END
 GO
 
 --------------------------------------------------------------------------------
--- ARCHIVO: UF por consorcio.txt
--- PROCEDIMIENTO: Importar unidades funcionales, cocheras y bauleras
--- Sin cuenta origen asociada (se carga en el siguiente)
---------------------------------------------------------------------------------
-CREATE OR ALTER PROCEDURE consorcio.SP_importar_unidades_funcionales
-    @path NVARCHAR(255)
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    BEGIN TRY
-        IF OBJECT_ID('tempdb..#TempUF') IS NOT NULL
-            DROP TABLE #TempUF;
-        CREATE TABLE #TempUF (
-            nombreConsorcio NVARCHAR(100),
-            numeroUnidadFuncional NVARCHAR(10),
-            piso CHAR(2),
-            departamento CHAR(1),
-            coeficiente NVARCHAR(10),
-            metrosCuadrados NVARCHAR(10),
-            bauleras NVARCHAR(2),
-            cochera NVARCHAR(2),
-            m2_baulera NVARCHAR(10),
-            m2_cochera NVARCHAR(10)
-        );
-
-        DECLARE @sql NVARCHAR(MAX);
-        SET @sql = N'
-            BULK INSERT #TempUF
-            FROM ''' + @path + N'''
-            WITH (
-                FIRSTROW = 2,
-                FIELDTERMINATOR = ''\t'',
-                ROWTERMINATOR = ''\n'',
-                CODEPAGE = ''65001'',
-                DATAFILETYPE = ''char''
-            );';
-        EXEC sp_executesql @sql;
-
-        INSERT INTO consorcio.unidad_funcional
-            (idConsorcio, cuentaOrigen, numeroUnidadFuncional, piso, departamento, coeficiente, metrosCuadrados)
-        SELECT
-            c.idConsorcio,
-            ROW_NUMBER() OVER(PARTITION BY c.idConsorcio ORDER BY t.numeroUnidadFuncional) AS cuentaOrigen,
-            TRY_CAST(t.numeroUnidadFuncional AS INT),
-            t.piso,
-            t.departamento,
-            TRY_CAST(REPLACE(t.coeficiente, ',', '.') AS DECIMAL(5,2)),
-            TRY_CAST(t.metrosCuadrados AS INT)
-        FROM #TempUF t
-        INNER JOIN consorcio.consorcio c
-            ON LTRIM(RTRIM(c.nombre)) = LTRIM(RTRIM(t.nombreConsorcio))
-        WHERE NOT EXISTS (
-            SELECT 1
-            FROM consorcio.unidad_funcional uf
-            WHERE uf.idConsorcio = c.idConsorcio
-              AND uf.piso = t.piso
-              AND uf.departamento = t.departamento
-        );
-
-        INSERT INTO consorcio.cochera (idUnidadFuncional, metrosCuadrados, coeficiente)
-        SELECT
-            uf.idUnidadFuncional,
-            TRY_CAST(REPLACE(t.m2_cochera, ',', '.') AS INT),
-            TRY_CAST(REPLACE(t.coeficiente, ',', '.') AS DECIMAL(5,2))
-        FROM #TempUF t
-        INNER JOIN consorcio.consorcio c
-            ON LTRIM(RTRIM(c.nombre)) = LTRIM(RTRIM(t.nombreConsorcio))
-        INNER JOIN consorcio.unidad_funcional uf
-            ON uf.idConsorcio = c.idConsorcio
-           AND uf.piso = t.piso
-           AND uf.departamento = t.departamento
-        WHERE t.cochera = 'SI' AND TRY_CAST(REPLACE(t.m2_cochera, ',', '.') AS INT) > 0;
-
-        INSERT INTO consorcio.baulera (idUnidadFuncional, metrosCuadrados, coeficiente)
-        SELECT
-            uf.idUnidadFuncional,
-            TRY_CAST(REPLACE(t.m2_baulera, ',', '.') AS INT),
-            TRY_CAST(REPLACE(t.coeficiente, ',', '.') AS DECIMAL(5,2))
-        FROM #TempUF t
-        INNER JOIN consorcio.consorcio c
-            ON LTRIM(RTRIM(c.nombre)) = LTRIM(RTRIM(t.nombreConsorcio))
-        INNER JOIN consorcio.unidad_funcional uf
-            ON uf.idConsorcio = c.idConsorcio
-           AND uf.piso = t.piso
-           AND uf.departamento = t.departamento
-        WHERE t.bauleras = 'SI' AND TRY_CAST(REPLACE(t.m2_baulera, ',', '.') AS INT) > 0;
-
-        DROP TABLE #TempUF;
-
-    END TRY
-    BEGIN CATCH
-        PRINT ERROR_MESSAGE();
-    END CATCH
-END;
-GO
-
---------------------------------------------------------------------------------
--- ARCHIVO: inquilino-propietarios-UF.csv
--- PROCEDIMIENTO: Importar cuentas origen para las UF ya creadas
---------------------------------------------------------------------------------
-CREATE OR ALTER PROCEDURE consorcio.SP_importar_unidades_funcionales_csv
-    @path NVARCHAR(255) -- Ruta a Inquilino-propietarios-UF.csv
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    -- 1. Crear tabla temporal de staging
-    IF OBJECT_ID('tempdb..#tempUF_CSV', 'U') IS NOT NULL
-        DROP TABLE #tempUF_CSV;
-
-    CREATE TABLE #tempUF_CSV (
-        stg_cvu_cbu            NVARCHAR(50),
-        stg_nombre_consorcio   NVARCHAR(50),
-        stg_nroUnidadFuncional NVARCHAR(10),
-        stg_piso               NVARCHAR(10),
-        stg_departamento       NVARCHAR(10)
-    );
-
-    -- 2. Cargar datos del CSV
-    DECLARE @BulkSqlCmd NVARCHAR(MAX);
-    SET @BulkSqlCmd = N'
-        BULK INSERT #tempUF_CSV
-        FROM ''' + @path + '''
-        WITH
-        (
-            FIELDTERMINATOR = ''|'',
-            ROWTERMINATOR = ''\n'',
-            CODEPAGE = ''ACP'',
-            FIRSTROW = 2
-        );
-    ';
-    EXEC sp_executesql @BulkSqlCmd;
-
-    -- 3. ACTUALIZAR la tabla final
-    UPDATE uf
-    SET
-        -- Actualizamos la cuentaOrigen con el CVU/CBU del archivo
-        uf.cuentaOrigen = CAST(TRIM(t.stg_cvu_cbu) AS CHAR(22))
-    FROM
-        consorcio.unidad_funcional AS uf
-    INNER JOIN
-        consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio
-    INNER JOIN
-        #tempUF_CSV AS t ON 
-            TRIM(t.stg_nombre_consorcio) = c.nombre
-            AND TRIM(t.stg_piso) = uf.piso
-            AND TRIM(t.stg_departamento) = uf.departamento
-    WHERE
-        -- Solo actualizamos las que tienen la cuentaOrigen incorrecta (ROW_NUMBER)
-        ISNUMERIC(uf.cuentaOrigen) = 1 AND uf.cuentaOrigen != CAST(TRIM(t.stg_cvu_cbu) AS CHAR(22));
-    
-    DROP TABLE #tempUF_CSV;
-END;
-GO
-
---------------------------------------------------------------------------------
+-- NUMERO: 5
 -- ARCHIVO: pagos_consorcios.csv
 -- PROCEDIMIENTO: Importar pagos
 --------------------------------------------------------------------------------

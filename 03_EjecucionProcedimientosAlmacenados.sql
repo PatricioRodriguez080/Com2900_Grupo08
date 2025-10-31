@@ -14,6 +14,7 @@ Enunciado:        "03 - Ejecución de Procedimientos Almacenados"
 */
 
 --------------------------------------------------------------------------------
+-- NUMERO: 1
 -- ARCHIVO: datos varios.xlsx
 -- PROCEDIMIENTO: Importar consorcios
 --------------------------------------------------------------------------------
@@ -23,18 +24,10 @@ SELECT * FROM consorcio.consorcio;
 
 
 --------------------------------------------------------------------------------
--- ARCHIVO: inquilino-propietarios-datos.csv
--- PROCEDIMIENTO: Importar personas y su relacion con las unidades funcionales (persona_unidad_funcional)
---------------------------------------------------------------------------------
-EXEC consorcio.SP_importar_personas @path = 'C:\Archivos para el TP\Inquilino-propietarios-datos.csv';
-
-SELECT * FROM consorcio.persona;
-SELECT * FROM consorcio.persona_unidad_funcional;
-
---------------------------------------------------------------------------------
+-- NUMERO: 2
 -- ARCHIVO: UF por consorcio.txt
 -- PROCEDIMIENTO: Importar unidades funcionales, cocheras y bauleras
--- Sin cuenta origen asociada (se carga en el siguiente)
+-- CONSIDERACIONES: Sin cuenta origen asociada (se carga en el siguiente)
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_importar_unidades_funcionales @path = 'C:\Archivos para el TP\UF por consorcio.txt';
 
@@ -44,6 +37,7 @@ SELECT * FROM consorcio.cochera;
 
 
 --------------------------------------------------------------------------------
+-- NUMERO: 3
 -- ARCHIVO: inquilino-propietarios-UF.csv
 -- PROCEDIMIENTO: Importar cuentas origen para las UF ya creadas
 --------------------------------------------------------------------------------
@@ -61,7 +55,20 @@ FROM
 JOIN
     consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio
 
+
 --------------------------------------------------------------------------------
+-- NUMERO: 4
+-- ARCHIVO: inquilino-propietarios-datos.csv
+-- PROCEDIMIENTO: Importar personas y su relacion con las unidades funcionales (persona_unidad_funcional)
+--------------------------------------------------------------------------------
+EXEC consorcio.SP_importar_personas @path = 'C:\Archivos para el TP\Inquilino-propietarios-datos.csv';
+
+SELECT * FROM consorcio.persona;
+SELECT * FROM consorcio.persona_unidad_funcional;
+
+
+--------------------------------------------------------------------------------
+-- NUMERO: 5
 -- ARCHIVO: pagos_consorcios.csv
 -- PROCEDIMIENTO: Importar pagos
 --------------------------------------------------------------------------------
