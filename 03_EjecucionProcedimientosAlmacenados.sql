@@ -1,7 +1,7 @@
 /*
 ===============================================================================
 Materia:          Bases de Datos Aplicadas
-Comisión:         01-2900
+ComisiÃ³n:         01-2900
 Grupo:            G08
 Fecha de Entrega: 04/11/2025
 Integrantes:
@@ -9,7 +9,7 @@ Integrantes:
     - Rodriguez Arrien, Juan Manuel (44259478)
     - Rodriguez, Patricio (45683229)
     - Ruiz, Leonel Emiliano (45537914)
-Enunciado:        "03 - Ejecución de Procedimientos Almacenados"
+Enunciado:        "03 - EjecuciÃ³n de Procedimientos Almacenados"
 ===============================================================================
 */
 
@@ -29,7 +29,7 @@ SELECT * FROM consorcio.consorcio;
 EXEC consorcio.SP_importar_personas @path = 'C:\Archivos para el TP\Inquilino-propietarios-datos.csv';
 
 SELECT * FROM consorcio.persona;
-
+SELECT * FROM consorcio.persona_unidad_funcional;
 
 --------------------------------------------------------------------------------
 -- ARCHIVO: UF por consorcio.txt
@@ -50,7 +50,16 @@ SELECT * FROM consorcio.cochera;
 EXEC consorcio.SP_importar_unidades_funcionales_csv @path = 'C:\Archivos para el TP\Inquilino-propietarios-UF.csv';
 
 SELECT * FROM consorcio.unidad_funcional;
-
+SELECT
+    uf.cuentaOrigen,
+    c.nombre AS nombre_consorcio,
+    uf.numeroUnidadFuncional,
+    uf.piso,
+    uf.departamento
+FROM
+    consorcio.unidad_funcional AS uf
+JOIN
+    consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio
 
 --------------------------------------------------------------------------------
 -- ARCHIVO: pagos_consorcios.csv
