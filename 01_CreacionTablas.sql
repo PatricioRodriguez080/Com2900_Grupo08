@@ -54,9 +54,11 @@ CREATE TABLE consorcio.estado_financiero (
 	egresos DECIMAL(12,2),
 	saldoCierre DECIMAL(12,2),
 	periodo VARCHAR(12) NOT NULL,
+    anio int NOT NULL,
 
 	CONSTRAINT fk_estadoFinanciero_consorcio FOREIGN KEY (idConsorcio) REFERENCES consorcio.consorcio(idConsorcio),
-	CONSTRAINT chk_estadoFinanciero_periodo CHECK (periodo IN('enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'))
+	CONSTRAINT chk_estadoFinanciero_periodo CHECK (periodo IN('enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre')),
+    CONSTRAINT uq_estadoFinanciero_unico UNIQUE (idConsorcio, periodo, anio)
 );
 
 CREATE TABLE consorcio.unidad_funcional (
