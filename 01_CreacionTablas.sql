@@ -163,7 +163,6 @@ CREATE TABLE consorcio.detalle_expensa (
     CONSTRAINT fk_detalleExpensa_expensa FOREIGN KEY (idExpensa) REFERENCES consorcio.expensa(idExpensa),
     CONSTRAINT fk_detalleExpensa_unidadFuncional FOREIGN KEY (idUnidadFuncional) REFERENCES consorcio.unidad_funcional(idUnidadFuncional),
     CONSTRAINT fk_detalleExpensa_pago FOREIGN KEY (idPago) REFERENCES consorcio.pago(idPago),
-    CONSTRAINT uq_detalle_expensa_unica UNIQUE (idExpensa, idUnidadFuncional),
     CONSTRAINT chk_detalleExpensa_fechaPrimerVenc CHECK (fechaPrimerVenc > fechaEmision),
     CONSTRAINT chk_detalleExpensa_fechaSegundoVenc CHECK (fechaSegundoVenc IS NULL OR fechaSegundoVenc > fechaPrimerVenc),
     CONSTRAINT chk_detalleExpensa_pagoRecibidos CHECK (pagoRecibido >= 0),
