@@ -374,7 +374,8 @@ CREATE OR ALTER PROCEDURE consorcio.sp_insertarUnidadFuncional
     @idConsorcio INT,
     @cuentaOrigen VARCHAR(22),
     @numeroUnidadFuncional INT,
-    @piso INT,
+    @piso CHAR(2),
+    @departamento CHAR(1),
     @coeficiente DECIMAL(5,2),
     @metrosCuadrados INT,
     @idUFCreada INT = NULL OUTPUT
@@ -402,7 +403,7 @@ BEGIN
     END
 
     -- validamos que la cuenta origen sea numerica
-    IF ISNUMERIC(@cuentaOrigen) = 0
+    IF @cuentaOrigen IS NOT NULL AND ISNUMERIC(@cuentaOrigen) = 0
     BEGIN
         RAISERROR('Error: La cuenta origen debe ser numerica.', 16, 1);
         RETURN -3;
@@ -428,6 +429,7 @@ BEGIN
             cuentaOrigen,
             numeroUnidadFuncional,
             piso,
+            departamento,
             coeficiente,
             metrosCuadrados
         )
@@ -436,11 +438,12 @@ BEGIN
             @cuentaOrigen,
             @numeroUnidadFuncional,
             @piso,
+            @departamento,
             @coeficiente,
             @metrosCuadrados
         );
 
-        -- captamos el id creado para q sirva de output
+        -- Obtener el ID creado
         SELECT @idUFCreada = SCOPE_IDENTITY();
         
         PRINT 'Unidad Funcional insertada con ID: ' + CAST(@idUFCreada AS VARCHAR);
