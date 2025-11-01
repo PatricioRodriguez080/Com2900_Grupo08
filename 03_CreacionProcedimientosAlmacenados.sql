@@ -1,15 +1,15 @@
 /*
 ===============================================================================
-Materia:         Bases de Datos Aplicadas
-Comisión:        Com 01-2900
-Grupo:           G08
+Materia:          Bases de Datos Aplicadas
+Comisión:         01-2900
+Grupo:            G08
 Fecha de Entrega: 04/11/2025
 Integrantes:
-    Bentancur Suarez, Ismael 45823439
-    Rodriguez Arrien, Juan Manuel 44259478
-    Rodriguez, Patricio 45683229
-    Ruiz, Leonel Emiliano 45537914
-Enunciado:       "03 - Creación de Procedimientos Almacenados"
+    - Bentancur Suarez, Ismael (45823439)
+    - Rodriguez Arrien, Juan Manuel (44259478)
+    - Rodriguez, Patricio (45683229)
+    - Ruiz, Leonel Emiliano (45537914)
+Enunciado:        "03 - Creación de Procedimientos Almacenados"
 ===============================================================================
 */
 
@@ -405,7 +405,7 @@ GO
 -- ARCHIVO: inquilino-propietarios-datos.csv
 -- PROCEDIMIENTO: Importar personas y su relacion con las unidades funcionales (persona_unidad_funcional)
 --------------------------------------------------------------------------------
-CREATE OR ALTER PROCEDURE consorcio.SP_importar_personas
+CREATE OR ALTER PROCEDURE consorcio.SP_importar_personas_csv
     @path NVARCHAR(255)
 AS
 BEGIN
@@ -920,7 +920,7 @@ BEGIN
     );
 
     -------------------------------------------------------------------------
-    -- 2. Cargar datos del Excel (rango especÃ­fico)
+    -- 2. Cargar datos del Excel (rango especi­fico)
     -------------------------------------------------------------------------
     DECLARE @sql NVARCHAR(MAX);
 
@@ -967,160 +967,58 @@ BEGIN
 END;
 GO
 
-
 ----------- CARGA DATOS FALTANTES A gastos_ordinarios ----------------------
-UPDATE go 
-SET
-    -- Lógica de SET condicional (Reglas 1 y 2)
-    go.nomEmpresa = CASE /* <-- CORRECCIÓN 2: Se usa 'go.' */
-        WHEN CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
-            -- 1. Si HAY " - ", toma la parte de la izquierda
-            TRIM(LEFT(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) - 1))
-        ELSE
-            -- 2. Si NO HAY " - ", toma el nombre completo
-            TRIM(p.nomEmpresa)
-    END,
-    go.subTipoGasto = CASE /* <-- CORRECCIÓN 3: Se usa 'go.' */
-        WHEN CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
-            -- 1. Si HAY " - ", toma la parte de la derecha
-            TRIM(SUBSTRING(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) + 3, LEN(p.nomEmpresa)))
-        ELSE
-            -- 2. Si NO HAY " - ", CONSERVA el valor que ya existe
-            go.subTipoGasto /* <-- CORRECCIÓN 4: Se usa 'go.' */
-    END
-
-FROM
-    -- El 'FROM' comienza con la tabla a actualizar y le da el alias 'go'
-    consorcio.gasto_ordinario AS go
-    
-    -- Unimos para encontrar el idConsorcio
-JOIN
-    consorcio.gasto AS g ON go.idGasto = g.idGasto
-JOIN
-    consorcio.expensa AS e ON g.idExpensa = e.idExpensa
-    
-    -- Unimos con la tabla proveedor
-JOIN
-    consorcio.proveedor AS p
-    -- Condición 1: Mismo Consorcio
-    ON e.idConsorcio = p.idConsorcio
-    
-    -- Lógica de JOIN condicional (Reglas 3 y 4)
-    AND UPPER(p.tipoGasto) LIKE
-        CASE
-            -- 3. Si es 'mantenimiento', busca 'BANCARIOS'
-            WHEN go.tipoGasto = 'mantenimiento' THEN '%BANCARIOS%'
-            -- 4. Si no, usa la lógica normal
-            ELSE '%' + UPPER(go.tipoGasto) + '%'
-        END;
-
-UPDATE consorcio.gasto_ordinario
-SET subTipoGasto='Gastos bancario'
-WHERE tipoGasto='mantenimiento'
-
-UPDATE consorcio.gasto_ordinario
-SET nomEmpresa='BANCO CREDICOOP'
-WHERE tipoGasto='mantenimiento'
-
-
------------ CARGAR LOS DATOS A LA TABLA ESTADO FINANCIERO -----------
-CREATE OR ALTER PROCEDURE consorcio.SP_cargar_estado_financiero
+CREATE PROCEDURE consorcio.sp_procesa_actualizacion_gastos
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    TRUNCATE TABLE consorcio.estado_financiero;
+    BEGIN TRY
+        BEGIN TRANSACTION;
 
-    WITH CteEgresos AS (
-        SELECT
-            e.idConsorcio,
-            TRIM(e.periodo) AS periodo,
-            e.anio,
-            SUM(ISNULL(g.subTotalOrdinarios, 0) + ISNULL(g.subTotalExtraOrd, 0)) AS totalEgresos
-        
-        FROM consorcio.expensa AS e LEFT JOIN consorcio.gasto AS g ON e.idExpensa = g.idExpensa
-        GROUP BY e.idConsorcio, TRIM(e.periodo), e.anio
-    ),
-    CteIngresos AS (
-        SELECT
-            c.idConsorcio,
-            CASE MONTH(p.fecha)
-                WHEN 1 THEN 'enero'
-                WHEN 2 THEN 'febrero'
-                WHEN 3 THEN 'marzo'
-                WHEN 4 THEN 'abril'
-                WHEN 5 THEN 'mayo'
-                WHEN 6 THEN 'junio'
-                WHEN 7 THEN 'julio'
-                WHEN 8 THEN 'agosto'
-                WHEN 9 THEN 'septiembre'
-                WHEN 10 THEN 'octubre'
-                WHEN 11 THEN 'noviembre'
-                WHEN 12 THEN 'diciembre'
-            END AS periodo,
-            YEAR(p.fecha) AS anio,
-            SUM(ISNULL(p.importe, 0)) AS totalIngresos
-        
-        FROM consorcio.pago AS p JOIN consorcio.unidad_funcional AS uf ON p.cuentaOrigen = uf.cuentaOrigen
-             JOIN consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio
-        
-        WHERE p.fecha IS NOT NULL
-        GROUP BY c.idConsorcio, MONTH(p.fecha), YEAR(p.fecha)
-    ),
-    CteCombinado AS (
-        SELECT
-            eg.idConsorcio,
-            eg.periodo,
-            eg.anio,
-            ISNULL(i.totalIngresos, 0) AS ingresosEnTermino,
-            CAST(0 AS DECIMAL(12,2)) AS ingresosAdeudados,
-            ISNULL(eg.totalEgresos, 0) AS egresos,
-            CASE eg.periodo
-                WHEN 'enero' THEN 1 WHEN 'febrero' THEN 2 WHEN 'marzo' THEN 3
-                WHEN 'abril' THEN 4 WHEN 'mayo' THEN 5 WHEN 'junio' THEN 6
-                WHEN 'julio' THEN 7 WHEN 'agosto' THEN 8 WHEN 'septiembre' THEN 9
-                WHEN 'octubre' THEN 10 WHEN 'noviembre' THEN 11 WHEN 'diciembre' THEN 12
-            END AS mesNumero
-        
-        FROM CteEgresos AS eg LEFT JOIN CteIngresos AS i ON eg.idConsorcio = i.idConsorcio
-             AND eg.periodo = i.periodo
-             AND eg.anio = i.anio
-    ),
-    CteSaldos AS (
-        SELECT
-            idConsorcio,
-            periodo,
-            anio,
-            mesNumero,
-            ingresosEnTermino,
-            ingresosAdeudados,
-            egresos,
-            SUM(ingresosEnTermino + ingresosAdeudados - egresos) OVER ( PARTITION BY idConsorcio ORDER BY anio, mesNumero) AS saldoCierre
-        
-        FROM CteCombinado
-    )
-    INSERT INTO consorcio.estado_financiero (
-        idConsorcio,
-        saldoAnterior,
-        ingresosEnTermino,
-        ingresosAdeudados,
-        egresos,
-        saldoCierre,
-        periodo,
-        anio
-    )
-    SELECT
-        idConsorcio,
-        ISNULL(LAG(saldoCierre, 1, 0) OVER (PARTITION BY idConsorcio ORDER BY anio, mesNumero), 0) AS saldoAnterior,
-        ingresosEnTermino,
-        ingresosAdeudados,
-        egresos,
-        saldoCierre,
-        periodo,
-        anio
-    
-    FROM CteSaldos
-    ORDER BY idConsorcio, anio, mesNumero;
+        UPDATE go 
+        SET
+          	go.nomEmpresa = CASE 
+              	WHEN CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
+                  	TRIM(LEFT(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) - 1))
+              	ELSE
+                  	TRIM(p.nomEmpresa)
+          	END,
+          	go.subTipoGasto = CASE
+              	WHEN CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
+                  	TRIM(SUBSTRING(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) + 3, LEN(p.nomEmpresa)))
+              	ELSE
+                  	go.subTipoGasto
+          	END
+        FROM
+          	consorcio.gasto_ordinario AS go
+        JOIN
+          	consorcio.gasto AS g ON go.idGasto = g.idGasto
+        JOIN
+          	consorcio.expensa AS e ON g.idExpensa = e.idExpensa
+        JOIN
+          	consorcio.proveedor AS p
+          	ON e.idConsorcio = p.idConsorcio
+          	AND UPPER(p.tipoGasto) LIKE
+              	CASE
+                  	WHEN go.tipoGasto = 'mantenimiento' THEN '%BANCARIOS%'
+                  	ELSE '%' + UPPER(go.tipoGasto) + '%'
+              	END;
 
-  END;
+        UPDATE consorcio.gasto_ordinario
+        SET 
+            subTipoGasto = 'Gastos bancario',
+            nomEmpresa = 'BANCO CREDICOOP'
+        WHERE 
+            tipoGasto = 'mantenimiento';
+
+        COMMIT TRANSACTION;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END;
 GO

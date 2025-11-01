@@ -93,9 +93,8 @@ EXEC consorcio.SP_importar_proveedores_excel @path = 'C:\Archivos para el TP\dat
 SELECT * FROM consorcio.proveedor
 
 --------------------------------------------------------------------------------
--- NUMERO: 7
--- PROCEDIMIENTO: Cargar Estado financiero
+-- NUMERO: 8
+-- ARCHIVO: Merge entre Proveedor y GastoOrdinario
+-- PROCEDIMIENTO: Importar Proveedores
 --------------------------------------------------------------------------------
-EXEC consorcio.SP_cargar_estado_financiero
-
-SELECT * FROM consorcio.estado_financiero
+EXEC consorcio.sp_procesa_actualizacion_gastos;
