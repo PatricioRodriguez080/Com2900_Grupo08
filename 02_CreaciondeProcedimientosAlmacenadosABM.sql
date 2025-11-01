@@ -474,7 +474,7 @@ CREATE OR ALTER PROCEDURE consorcio.sp_modificarUnidadFuncional
     @idConsorcio INT = NULL,
     @cuentaOrigen VARCHAR(22) = NULL,
     @numeroUnidadFuncional INT = NULL,
-    @piso INT = NULL,
+    @piso CHAR(2) = NULL,
     @coeficiente DECIMAL(5,2) = NULL,
     @metrosCuadrados INT = NULL
 )

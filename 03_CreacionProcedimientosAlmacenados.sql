@@ -303,24 +303,51 @@ BEGIN
     ';
     EXEC sp_executesql @BulkSqlCmd;
 
-    -- 3. ACTUALIZAR la tabla final
-    UPDATE uf
-    SET
-        -- Actualizamos la cuentaOrigen con el CVU/CBU del archivo
-        uf.cuentaOrigen = CAST(TRIM(t.stg_cvu_cbu) AS CHAR(22))
-    FROM
-        consorcio.unidad_funcional AS uf
-    INNER JOIN
-        consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio
-    INNER JOIN
-        #tempUF_CSV AS t ON 
-            TRIM(t.stg_nombre_consorcio) = c.nombre
-            AND TRIM(t.stg_piso) = uf.piso
-            AND TRIM(t.stg_departamento) = uf.departamento
-    WHERE
-        -- Solo actualizamos las que tienen la cuentaOrigen incorrecta (ROW_NUMBER)
-        ISNUMERIC(uf.cuentaOrigen) = 1 AND uf.cuentaOrigen != CAST(TRIM(t.stg_cvu_cbu) AS CHAR(22));
-    
+    -- 3. Crear tabla temporal numerada para iterar con WHILE
+    IF OBJECT_ID('tempdb..#tempUF_Num', 'U') IS NOT NULL
+        DROP TABLE #tempUF_Num;
+
+    SELECT 
+        ROW_NUMBER() OVER (ORDER BY t.stg_nombre_consorcio, t.stg_piso, t.stg_departamento) AS rn,
+        uf.idUnidadFuncional,
+        CAST(TRIM(t.stg_cvu_cbu) AS VARCHAR(22)) AS cuentaOrigen
+    INTO #tempUF_Num
+    FROM consorcio.unidad_funcional AS uf
+    INNER JOIN consorcio.consorcio AS c
+        ON uf.idConsorcio = c.idConsorcio
+    INNER JOIN #tempUF_CSV AS t
+        ON TRIM(t.stg_nombre_consorcio) = c.nombre
+        AND TRIM(t.stg_piso) = uf.piso
+        AND TRIM(t.stg_departamento) = uf.departamento
+    WHERE ISNUMERIC(uf.cuentaOrigen) = 1
+      AND uf.cuentaOrigen != CAST(TRIM(t.stg_cvu_cbu) AS CHAR(22));
+
+    -- 4. Iterar con WHILE
+    DECLARE @i INT = 1;
+    DECLARE @max INT;
+    DECLARE @idUF INT;
+    DECLARE @cuentaOrigen VARCHAR(22);
+
+    SELECT @max = MAX(rn) FROM #tempUF_Num;
+
+    WHILE @i <= @max
+    BEGIN
+        SELECT 
+            @idUF = idUnidadFuncional,
+            @cuentaOrigen = cuentaOrigen
+        FROM #tempUF_Num
+        WHERE rn = @i;
+
+        -- Llamada al SP de modificación
+        EXEC consorcio.sp_modificarUnidadFuncional
+            @idUnidadFuncional = @idUF,
+            @cuentaOrigen = @cuentaOrigen;
+
+        SET @i = @i + 1;
+    END
+
+    -- 5. Limpiar temporales
+    DROP TABLE #tempUF_Num;
     DROP TABLE #tempUF_CSV;
 END;
 GO
