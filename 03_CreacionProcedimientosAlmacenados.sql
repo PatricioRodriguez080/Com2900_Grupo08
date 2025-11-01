@@ -645,7 +645,5 @@ BEGIN
     -------------------------------------------------------------------------
     DROP TABLE #pago_Num;
     DROP TABLE #pago_staging;
-
-    PRINT 'Importación de pagos completada.';
 END;
 GO
