@@ -22,7 +22,6 @@ EXEC consorcio.SP_importar_consorcios_excel @path = 'C:\Archivos para el TP\dato
 
 SELECT * FROM consorcio.consorcio;
 
-
 --------------------------------------------------------------------------------
 -- NUMERO: 2
 -- ARCHIVO: UF por consorcio.txt
@@ -34,7 +33,6 @@ EXEC consorcio.SP_importar_unidades_funcionales @path = 'C:\Archivos para el TP\
 SELECT * FROM consorcio.unidad_funcional;
 SELECT * FROM consorcio.baulera;
 SELECT * FROM consorcio.cochera;
-
 
 --------------------------------------------------------------------------------
 -- NUMERO: 3
@@ -55,7 +53,6 @@ FROM
 JOIN
     consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio
 
-
 --------------------------------------------------------------------------------
 -- NUMERO: 4
 -- ARCHIVO: inquilino-propietarios-datos.csv
@@ -66,7 +63,6 @@ EXEC consorcio.SP_importar_personas @path = 'C:\Archivos para el TP\Inquilino-pr
 SELECT * FROM consorcio.persona;
 SELECT * FROM consorcio.persona_unidad_funcional;
 
-
 --------------------------------------------------------------------------------
 -- NUMERO: 5
 -- ARCHIVO: pagos_consorcios.csv
@@ -75,3 +71,23 @@ SELECT * FROM consorcio.persona_unidad_funcional;
 EXEC consorcio.SP_carga_pagos @path = 'C:\Archivos para el TP\pagos_consorcios.csv';
 
 SELECT * FROM consorcio.pago;
+
+--------------------------------------------------------------------------------
+-- NUMERO: 6
+-- ARCHIVO: Servicios.Servicios.json
+-- PROCEDIMIENTO: Importar expensas y gastos
+--------------------------------------------------------------------------------
+EXEC consorcio.SP_carga_expensas @path = 'C:\Archivos para el TP\Servicios.Servicios.json'
+
+SELECT * FROM consorcio.expensa
+SELECT * FROM consorcio.gasto
+SELECT * FROM consorcio.gasto_ordinario
+
+--------------------------------------------------------------------------------
+-- NUMERO: 7
+-- ARCHIVO: datos varios.xlsx
+-- PROCEDIMIENTO: Importar Proveedores
+--------------------------------------------------------------------------------
+EXEC consorcio.SP_importar_proveedores_excel @path = 'C:\Archivos para el TP\datos varios.xlsx';
+
+SELECT * FROM consorcio.proveedor
