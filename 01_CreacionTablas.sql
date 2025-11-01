@@ -16,7 +16,7 @@ Enunciado:       "01 - Creación de Tablas"
 
 IF NOT EXISTS (SELECT * FROM  sys.schemas WHERE name = 'consorcio')
     EXEC('CREATE SCHEMA consorcio');
-go
+GO
 
 DROP TABLE IF EXISTS consorcio.gasto_extra_ordinario;
 DROP TABLE IF EXISTS consorcio.gasto_ordinario;
@@ -29,9 +29,10 @@ DROP TABLE IF EXISTS consorcio.baulera;
 DROP TABLE IF EXISTS consorcio.cochera;
 DROP TABLE IF EXISTS consorcio.unidad_funcional;
 DROP TABLE IF EXISTS consorcio.estado_financiero;
+DROP TABLE IF EXISTS consorcio.proveedor;
 DROP TABLE IF EXISTS consorcio.persona;
 DROP TABLE IF EXISTS consorcio.consorcio;
-go
+GO
 
 CREATE TABLE consorcio.consorcio (
 	idConsorcio INT PRIMARY KEY NOT NULL,

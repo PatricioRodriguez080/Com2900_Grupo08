@@ -1002,5 +1002,58 @@ BEGIN
     DROP TABLE consorcio.proveedor_temp;
 END;
 GO
-END;
-GO
+
+
+----------- CARGA DATOS FALTANTES A gastos_ordinarios ----------------------
+UPDATE go 
+SET
+    -- Lógica de SET condicional (Reglas 1 y 2)
+    go.nomEmpresa = CASE /* <-- CORRECCIÓN 2: Se usa 'go.' */
+        WHEN CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
+            -- 1. Si HAY " - ", toma la parte de la izquierda
+            TRIM(LEFT(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) - 1))
+        ELSE
+            -- 2. Si NO HAY " - ", toma el nombre completo
+            TRIM(p.nomEmpresa)
+    END,
+    go.subTipoGasto = CASE /* <-- CORRECCIÓN 3: Se usa 'go.' */
+        WHEN CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
+            -- 1. Si HAY " - ", toma la parte de la derecha
+            TRIM(SUBSTRING(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) + 3, LEN(p.nomEmpresa)))
+        ELSE
+            -- 2. Si NO HAY " - ", CONSERVA el valor que ya existe
+            go.subTipoGasto /* <-- CORRECCIÓN 4: Se usa 'go.' */
+    END
+
+FROM
+    -- El 'FROM' comienza con la tabla a actualizar y le da el alias 'go'
+    consorcio.gasto_ordinario AS go
+    
+    -- Unimos para encontrar el idConsorcio
+JOIN
+    consorcio.gasto AS g ON go.idGasto = g.idGasto
+JOIN
+    consorcio.expensa AS e ON g.idExpensa = e.idExpensa
+    
+    -- Unimos con la tabla proveedor
+JOIN
+    consorcio.proveedor AS p
+    -- Condición 1: Mismo Consorcio
+    ON e.idConsorcio = p.idConsorcio
+    
+    -- Lógica de JOIN condicional (Reglas 3 y 4)
+    AND UPPER(p.tipoGasto) LIKE
+        CASE
+            -- 3. Si es 'mantenimiento', busca 'BANCARIOS'
+            WHEN go.tipoGasto = 'mantenimiento' THEN '%BANCARIOS%'
+            -- 4. Si no, usa la lógica normal
+            ELSE '%' + UPPER(go.tipoGasto) + '%'
+        END;
+
+UPDATE consorcio.gasto_ordinario
+SET subTipoGasto='Gastos bancario'
+WHERE tipoGasto='mantenimiento'
+
+UPDATE consorcio.gasto_ordinario
+SET nomEmpresa='BANCO CREDICOOP'
+WHERE tipoGasto='mantenimiento'
