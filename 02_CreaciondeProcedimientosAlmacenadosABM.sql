@@ -61,8 +61,7 @@ BEGIN
         RETURN 0;
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al insertar persona: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al insertar persona: %s', 16, 1, ERROR_MESSAGE());
         RETURN -3;
     END CATCH
 
@@ -126,8 +125,7 @@ BEGIN
         RETURN 0;
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al modificar la persona: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al modificar la persona: %s', 16, 1, ERROR_MESSAGE());
         RETURN -4;
     END CATCH
 
@@ -153,7 +151,7 @@ BEGIN
     END
 
     --validamos que no este ya dada de baja
-    IF EXISTS (SELECT 1 FROM consorcio.persona WHERE idPersona = @idPersona AND fechaBaja IS NOT NULL)
+    IF EXISTS (SELECT 1 FROM consorcio.persona WHERE idPersona = @idPersona AND FechaBaja IS NOT NULL)
     BEGIN
         RAISERROR ('Advertencia: La persona ya se encontraba dada de baja.', 10, 1); --aca va 10 en lugar de 16 pq el 10 es para advertencias sin detener el script
         RETURN 0; --como es advertencia y no error devuelvo 0
@@ -170,8 +168,7 @@ BEGIN
         RETURN 0;
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al eliminar la persona: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al eliminar la persona: %s', 16, 1, ERROR_MESSAGE());
         RETURN -2;
     END CATCH
 
@@ -206,7 +203,7 @@ BEGIN
     --validamos que la UF exista y no este dada de baja
     IF NOT EXISTS (SELECT 1 FROM consorcio.unidad_funcional 
                    WHERE idUnidadFuncional = @idUnidadFuncional
-                     AND fechaBaja IS NULL)
+                     AND FechaBaja IS NULL)
     BEGIN
         RAISERROR('Error: La unidad funcional no existe o esta dada de baja.', 16, 1);
         RETURN -2;
@@ -245,8 +242,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al relacionar persona con UF: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al relacionar persona con UF: %s', 16, 1, ERROR_MESSAGE());
         RETURN -5;
     END CATCH
 
@@ -285,7 +281,7 @@ BEGIN
     -- Validamos que la UF exista y este activa
     IF NOT EXISTS (SELECT 1 FROM consorcio.unidad_funcional 
                    WHERE idUnidadFuncional = @idUnidadFuncional
-                     AND fechaBaja IS NULL)
+                     AND FechaBaja IS NULL)
     BEGIN
         RAISERROR('Error: La Unidad Funcional no existe o esta dada de baja. No se puede modificar.', 16, 1);
         RETURN -3;
@@ -313,8 +309,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al modificar la relacion: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al modificar la relacion: %s', 16, 1, ERROR_MESSAGE());
         RETURN -100;
     END CATCH
 
@@ -361,8 +356,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al eliminar la relación: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al eliminar la relación: %s', 16, 1, ERROR_MESSAGE());
         RETURN -3;
     END CATCH
 
@@ -401,7 +395,7 @@ BEGIN
     IF EXISTS (SELECT 1 FROM consorcio.unidad_funcional 
                WHERE idConsorcio = @idConsorcio 
                  AND numeroUnidadFuncional = @numeroUnidadFuncional
-                 AND fechaBaja IS NULL)
+                 AND FechaBaja IS NULL)
     BEGIN
         RAISERROR('Error: Ya existe una UF ACTIVA con el numero indicado en este consorcio.', 16, 1);
         RETURN -2;
@@ -453,8 +447,7 @@ BEGIN
         RETURN 0;
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al insertar la Unidad Funcional: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al insertar la Unidad Funcional: %s', 16, 1, ERROR_MESSAGE());
         RETURN -6;
     END CATCH
 
@@ -482,7 +475,7 @@ BEGIN
     -- validamos q exista la uf a modificar y q este activa
     IF NOT EXISTS (SELECT 1 FROM consorcio.unidad_funcional 
                    WHERE idUnidadFuncional = @idUnidadFuncional
-                     AND fechaBaja IS NULL)
+                     AND FechaBaja IS NULL)
     BEGIN
         RAISERROR('Error: La Unidad Funcional a modificar no existe o esta dada de baja.', 16, 1);
         RETURN -1;
@@ -509,7 +502,7 @@ BEGIN
                    WHERE idConsorcio = @targetConsorcioID 
                      AND numeroUnidadFuncional = @numeroUnidadFuncional
                      AND idUnidadFuncional <> @idUnidadFuncional
-                     AND fechaBaja IS NULL)
+                     AND FechaBaja IS NULL)
         BEGIN
             RAISERROR('Error: El numero de UF ya esta usado por otra UF activa en el consorcio destino.', 16, 1);
             RETURN -3;
@@ -554,8 +547,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al modificar la Unidad Funcional: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al modificar la Unidad Funcional: %s', 16, 1, ERROR_MESSAGE());
         RETURN -7;
     END CATCH
 
@@ -577,7 +569,7 @@ BEGIN
     -- validar que la UF exista y este activa
     IF NOT EXISTS (SELECT 1 FROM consorcio.unidad_funcional 
                    WHERE idUnidadFuncional = @idUnidadFuncional
-                     AND fechaBaja IS NULL)
+                     AND FechaBaja IS NULL)
     BEGIN
         RAISERROR('Error: La Unidad Funcional no existe o ya esta dada de baja.', 16, 1);
         RETURN -1;
@@ -613,7 +605,7 @@ BEGIN
     BEGIN TRY
         UPDATE consorcio.unidad_funcional
         SET 
-            fechaBaja = GETDATE() -- Le asigna la fecha en la q se dio de baja
+            FechaBaja = GETDATE() -- Le asigna la fecha en la q se dio de baja
         WHERE
             idUnidadFuncional = @idUnidadFuncional;
 
@@ -622,8 +614,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al dar de baja la Unidad Funcional: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al dar de baja la Unidad Funcional: %s', 16, 1, ERROR_MESSAGE());
         RETURN -5;
     END CATCH
 
@@ -714,8 +705,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al insertar/reactivar el consorcio: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al insertar/reactivar el consorcio: %s', 16, 1, ERROR_MESSAGE());
         RETURN -5;
     END CATCH
 
@@ -781,8 +771,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al actualizar el consorcio: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al actualizar el consorcio: %s', 16, 1, ERROR_MESSAGE());
         RETURN -5;
     END CATCH
 
@@ -811,7 +800,7 @@ BEGIN
     -- validamos q el consorcio no tenga UF linkeadas activas
     IF EXISTS (SELECT 1 FROM consorcio.UnidadFuncional 
                WHERE idConsorcio = @idConsorcio 
-               AND fechaBaja IS NULL)
+               AND FechaBaja IS NULL)
     BEGIN
         RAISERROR('Error: No se puede dar de baja el consorcio. Ya que tiene UF activas asociadas.', 16, 1);
         RETURN -2;
@@ -829,8 +818,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al dar de baja el consorcio: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al dar de baja el consorcio: %s', 16, 1, ERROR_MESSAGE());
         RETURN -3;
     END CATCH
 
@@ -882,7 +870,7 @@ BEGIN
         RETURN -3;
     END
 
-    -- validaciones de valores
+    -- 4. validaciones de valores
     IF (@ingresosEnTermino IS NOT NULL AND @ingresosEnTermino < 0) OR
        (@ingresosAdeudados IS NOT NULL AND @ingresosAdeudados < 0) OR
        (@egresos IS NOT NULL AND @egresos < 0)
@@ -920,8 +908,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al insertar el estado financiero: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al insertar el estado financiero: %s', 16, 1, ERROR_MESSAGE());
         RETURN -5;
     END CATCH
 
@@ -987,7 +974,7 @@ BEGIN
                     AND anio = @targetAnio
                    AND idEstadoFinanciero <> @idEstadoFinanciero)
         BEGIN
-            RAISERROR('Error: La nueva combinacion (Consorcio %d, %s %d) ya existe en otro registro.', 16, 1, @targetConsorcio, @targetPeriodo, @targetAnio);
+            RAISERROR('Error: La nueva combinación (Consorcio %d, %s %d) ya existe en otro registro.', 16, 1, @targetConsorcio, @targetPeriodo, @targetAnio);
             RETURN -4;
         END
     END
@@ -1019,8 +1006,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al actualizar el estado financiero: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al actualizar el estado financiero: %s', 16, 1, ERROR_MESSAGE());
         RETURN -6;
     END CATCH
 
@@ -1054,8 +1040,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al eliminar el estado financiero: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al eliminar el estado financiero: %s', 16, 1, ERROR_MESSAGE());
         RETURN -2;
     END CATCH
 
@@ -1132,8 +1117,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al insertar el pago: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al insertar el pago: %s', 16, 1, ERROR_MESSAGE());
         RETURN -6;
     END CATCH
 
@@ -1203,8 +1187,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al actualizar el pago: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al actualizar el pago: %s', 16, 1, ERROR_MESSAGE());
         RETURN -5;
     END CATCH
 
@@ -1244,8 +1227,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al eliminar el pago: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al eliminar el pago: %s', 16, 1, ERROR_MESSAGE());
         RETURN -3;
     END CATCH
 
@@ -1309,8 +1291,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al insertar la cochera: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al insertar la cochera: %s', 16, 1, ERROR_MESSAGE());
         RETURN -4;
     END CATCH
 
@@ -1375,8 +1356,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al actualizar la cochera: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al actualizar la cochera: %s', 16, 1, ERROR_MESSAGE());
         RETURN -5;
     END CATCH
 
@@ -1418,8 +1398,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al eliminar la cochera: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al eliminar la cochera: %s', 16, 1, ERROR_MESSAGE());
         RETURN -3;
     END CATCH
 
@@ -1433,9 +1412,12 @@ GO
 --INSERTAR BAULERA
 ------------------
 CREATE OR ALTER PROCEDURE consorcio.sp_insertarBaulera
+    -- Parámetros de entrada
     @idUnidadFuncional INT = NULL, -- Permite NULL
     @metrosCuadrados INT,
     @coeficiente DECIMAL(5,2),
+    
+    -- Parámetro de salida
     @idBauleraCreada INT = NULL OUTPUT
 AS
 BEGIN
@@ -1483,8 +1465,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al insertar la baulera: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al insertar la baulera: %s', 16, 1, ERROR_MESSAGE());
         RETURN -4;
     END CATCH
 
@@ -1548,8 +1529,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al actualizar la baulera: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al actualizar la baulera: %s', 16, 1, ERROR_MESSAGE());
         RETURN -5;
     END CATCH
 
@@ -1591,8 +1571,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al eliminar la baulera: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al eliminar la baulera: %s', 16, 1, ERROR_MESSAGE());
         RETURN -3;
     END CATCH
 
@@ -1658,8 +1637,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al insertar el cierre de expensa: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al insertar el cierre de expensa: %s', 16, 1, ERROR_MESSAGE());
         RETURN -4;
     END CATCH
 
@@ -1748,8 +1726,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al actualizar el cierre de expensa: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al actualizar el cierre de expensa: %s', 16, 1, ERROR_MESSAGE());
         RETURN -6;
     END CATCH
 
@@ -1790,8 +1767,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al eliminar la expensa: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al eliminar la expensa: %s', 16, 1, ERROR_MESSAGE());
         RETURN -3;
     END CATCH
 
@@ -1899,8 +1875,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al insertar el detalle de expensa: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al insertar el detalle de expensa: %s', 16, 1, ERROR_MESSAGE());
         RETURN -8;
     END CATCH
 
@@ -1980,7 +1955,7 @@ BEGIN
     -- validamos fechas de vencimiento
     IF @fechaPrimerVenc IS NOT NULL AND @fechaPrimerVenc <= @currentFechaEmision -- Usamos la fecha de emisión capturada
     BEGIN
-        RAISERROR('Error: La nueva fecha de primer vencimiento debe ser posterior a la fecha de emision', 16, 1);
+        RAISERROR('Error: La nueva fecha de primer vencimiento debe ser posterior a la fecha de emision (%s).', 16, 1, CONVERT(VARCHAR, @currentFechaEmision, 103));
         RETURN -6;
     END
 
@@ -1989,7 +1964,7 @@ BEGIN
 
     IF @fechaSegundoVenc IS NOT NULL AND @fechaSegundoVenc <= @finalPrimerVenc
     BEGIN
-        RAISERROR('Error: La nueva fecha de segundo vencimiento debe ser posterior a la del primero.', 16, 1);
+        RAISERROR('Error: La nueva fecha de segundo vencimiento debe ser posterior a la del primero (%s).', 16, 1, CONVERT(VARCHAR, @finalPrimerVenc, 103));
         RETURN -7;
     END
 
@@ -2026,8 +2001,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al actualizar el detalle: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al actualizar el detalle: %s', 16, 1, ERROR_MESSAGE());
         RETURN -9;
     END CATCH
 
@@ -2077,8 +2051,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al eliminar el detalle de expensa: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al eliminar el detalle de expensa: %s', 16, 1, ERROR_MESSAGE());
         RETURN -3;
     END CATCH
 
@@ -2140,8 +2113,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al insertar el gasto: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al insertar el gasto: %s', 16, 1, ERROR_MESSAGE());
         RETURN -4;
     END CATCH
 
@@ -2201,8 +2173,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al actualizar el gasto: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al actualizar el gasto: %s', 16, 1, ERROR_MESSAGE());
         RETURN -4;
     END CATCH
 
@@ -2256,8 +2227,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al eliminar el gasto: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al eliminar el gasto: %s', 16, 1, ERROR_MESSAGE());
         RETURN -4;
     END CATCH
 
@@ -2335,8 +2305,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al insertar el gasto ordinario: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al insertar el gasto ordinario: %s', 16, 1, ERROR_MESSAGE());
         RETURN -6;
     END CATCH
 
@@ -2432,8 +2401,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al actualizar el gasto ordinario: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al actualizar el gasto ordinario: %s', 16, 1, ERROR_MESSAGE());
         RETURN -6;
     END CATCH
 
@@ -2479,8 +2447,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al eliminar el gasto ordinario: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al eliminar el gasto ordinario: %s', 16, 1, ERROR_MESSAGE());
         RETURN -3;
     END CATCH
 
@@ -2567,8 +2534,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al insertar el gasto extraordinario: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al insertar el gasto extraordinario: %s', 16, 1, ERROR_MESSAGE());
         RETURN -7;
     END CATCH
 
@@ -2684,8 +2650,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al actualizar el gasto extraordinario: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al actualizar el gasto extraordinario: %s', 16, 1, ERROR_MESSAGE());
         RETURN -7;
     END CATCH
 
@@ -2731,8 +2696,7 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al eliminar el gasto extraordinario: %s', 16, 1, @ErrorMessage);
+        RAISERROR('Error inesperado al eliminar el gasto extraordinario: %s', 16, 1, ERROR_MESSAGE());
         RETURN -3;
     END CATCH
 
