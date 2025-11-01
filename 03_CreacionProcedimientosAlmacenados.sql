@@ -403,50 +403,35 @@ BEGIN
     SELECT 
         ROW_NUMBER() OVER (ORDER BY Col3_DNI) AS rn,
 
-        -- Limpieza de nombre
-        RTRIM(
-            (
-                SELECT  
-                    UPPER(LEFT(value, 1)) + LOWER(SUBSTRING(value, 2, LEN(value))) + ' '
-                FROM STRING_SPLIT(
-                    LTRIM(RTRIM(
-                        REPLACE(REPLACE(REPLACE(t.Col1_Nombre, '‚', 'é'), '¥', 'ñ'), '¡', 'í') 
-                    )), ' '
-                )
-                FOR XML PATH(''), TYPE
-            ).value('.', 'NVARCHAR(MAX)')
-        ) AS nombre,
+       -- Limpieza de Nombre
+        RTRIM((
+            SELECT UPPER(LEFT(s.value,1)) + LOWER(SUBSTRING(s.value,2,LEN(s.value))) + ' '
+            FROM STRING_SPLIT(
+                REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(t.Col1_Nombre)), '‚','é'), '¥','ñ'), '¡','í'), ' '
+            ) s
+            FOR XML PATH(''), TYPE
+        ).value('.', 'NVARCHAR(MAX)')) AS nombre,
 
         -- Limpieza de Apellido
-        RTRIM(
-            (
-                SELECT  
-                    UPPER(LEFT(value, 1)) + LOWER(SUBSTRING(value, 2, LEN(value))) + ' '
-                FROM STRING_SPLIT(
-                    LTRIM(RTRIM(
-                        REPLACE(REPLACE(REPLACE(t.Col2_Apellido, '‚', 'é'), '¥', 'ñ'), '¡', 'í') 
-                    )), ' '
-                )
-                FOR XML PATH(''), TYPE
-            ).value('.', 'NVARCHAR(MAX)')
-        ) AS apellido,
+        RTRIM((
+            SELECT UPPER(LEFT(s.value,1)) + LOWER(SUBSTRING(s.value,2,LEN(s.value))) + ' '
+            FROM STRING_SPLIT(
+                REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(t.Col2_Apellido)), '‚','é'), '¥','ñ'), '¡','í'), ' '
+            ) s
+            FOR XML PATH(''), TYPE
+        ).value('.', 'NVARCHAR(MAX)')) AS apellido,
 
         -- DNI como INT
         CAST(LTRIM(RTRIM(t.Col3_DNI)) AS INT) AS dni,
 
         -- Email limpiado
         LOWER(
+        REPLACE(
             REPLACE(
-                REPLACE(
-                    REPLACE(
-                        LTRIM(RTRIM(
-                            REPLACE(REPLACE(REPLACE(t.Col4_Email, '‚', 'é'), '¥', 'ñ'), '¡', 'í') 
-                        )),
-                        ' ', '_'
-                    ),
-                    '__', '_'
-                ),
-                '_@', '@'
+                REPLACE(LTRIM(RTRIM(t.Col4_Email)), '‚', 'é'), 
+                    '¥', 'ñ'
+                ), 
+                '¡', 'í'
             )
         ) AS email,
 
