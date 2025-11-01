@@ -30,80 +30,117 @@ EXEC sp_MSset_oledb_prop N'Microsoft.ACE.OLEDB.12.0', N'AllowInProcess', 1;
 EXEC sp_MSset_oledb_prop N'Microsoft.ACE.OLEDB.12.0', N'DynamicParameters', 1;
 GO
 
-
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_consorcios_excel
     @path NVARCHAR(255)
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- 1. Crear tabla temporal (AÑADIENDO nro_consorcio_excel)
-    IF OBJECT_ID('consorcio.consorcio_temp', 'U') IS NOT NULL
-        DROP TABLE consorcio.consorcio_temp;
+    -------------------------------------------------------------------------
+    -- 1. Crear tabla staging
+    -------------------------------------------------------------------------
+    IF OBJECT_ID('tempdb..#stg_consorcio', 'U') IS NOT NULL
+        DROP TABLE #stg_consorcio;
 
-    CREATE TABLE consorcio.consorcio_temp (
-        id_consorcio_temp INT IDENTITY (1,1) PRIMARY KEY,
-        nro_consorcio_excel VARCHAR(20), -- Columna para capturar 'Consorcio 1', etc.
-        nombre VARCHAR(50) NOT NULL,
-        direccion VARCHAR(50) NOT NULL,
-        cant_unidades_funcionales INT NOT NULL,
-        m2_totales INT NOT NULL
+    CREATE TABLE #stg_consorcio (
+        stg_nroConsorcioExcel VARCHAR(20),
+        stg_nombre VARCHAR(50) NOT NULL,
+        stg_direccion VARCHAR(50) NOT NULL,
+        stg_cantidadUnidadesFuncionales INT NOT NULL,
+        stg_metrosCuadradosTotales INT NOT NULL
     );
 
+    -------------------------------------------------------------------------
+    -- 2. Cargar Excel a staging
+    -------------------------------------------------------------------------
     DECLARE @sql NVARCHAR(MAX);
 
-    -------------------------------------------------------------------------
-    -- 2. INSERTAR EN LA TABLA TEMPORAL (SQL Dinámico)
-    -------------------------------------------------------------------------
     SET @sql = N'
-    INSERT INTO consorcio.consorcio_temp (
-        nro_consorcio_excel, nombre, direccion, cant_unidades_funcionales, m2_totales
+    INSERT INTO #stg_consorcio (
+        stg_nroConsorcioExcel, stg_nombre, stg_direccion, stg_cantidadUnidadesFuncionales, stg_metrosCuadradosTotales
     )
     SELECT 
-        LTRIM(RTRIM(CAST([Consorcio] AS VARCHAR(20)))) AS nro_consorcio_excel, -- Captura el ID de origen
-        LTRIM(RTRIM([Nombre del consorcio])) AS nombre,
-        LTRIM(RTRIM([Domicilio])) AS direccion,
-        TRY_CAST([Cant unidades funcionales] AS INT) AS cant_unidades_funcionales,
-        TRY_CAST([m2 totales] AS INT) AS m2_totales
+        LTRIM(RTRIM(CAST([Consorcio] AS VARCHAR(20)))) AS stg_nroConsorcioExcel,
+        LTRIM(RTRIM([Nombre del consorcio])) AS stg_nombre,
+        LTRIM(RTRIM([Domicilio])) AS stg_direccion,
+        TRY_CAST([Cant unidades funcionales] AS INT) AS stg_cantidadUnidadesFuncionales,
+        TRY_CAST([m2 totales] AS INT) AS stg_metrosCuadradosTotales
     FROM OPENROWSET(
         ''Microsoft.ACE.OLEDB.12.0'',
         ''Excel 12.0;Database=' + @path + ';HDR=YES;IMEX=1;'',
-        ''SELECT * FROM [Consorcios$]'' 
+        ''SELECT * FROM [Consorcios$]''
     ) AS t
     WHERE 
-        -- Filtros de validación
         LTRIM(RTRIM(CAST([Consorcio] AS VARCHAR(20)))) IS NOT NULL
-        AND TRY_CAST([Cant unidades funcionales] AS INT) IS NOT NULL
         AND TRY_CAST([Cant unidades funcionales] AS INT) > 0
-        AND TRY_CAST([m2 totales] AS INT) IS NOT NULL
         AND TRY_CAST([m2 totales] AS INT) > 0
         AND LTRIM(RTRIM([Nombre del consorcio])) IS NOT NULL
-        AND LTRIM(RTRIM([Domicilio])) IS NOT NULL
-    ;';
+        AND LTRIM(RTRIM([Domicilio])) IS NOT NULL;
+    ';
 
     EXEC sp_executesql @sql;
 
     -------------------------------------------------------------------------
-    -- 3. INSERTAR EN LA TABLA FINAL (Lectura de la tabla temporal)
+    -- 3. Crear tabla numerada para iterar
     -------------------------------------------------------------------------
-    INSERT INTO consorcio.consorcio (
-        idConsorcio, nombre, direccion, cantidadUnidadesFuncionales, metrosCuadradosTotales
-    )
-    SELECT
-        -- Se extrae el número del texto 'Consorcio X'
-        CAST(REPLACE(t.nro_consorcio_excel, 'Consorcio ', '') AS INT) AS idConsorcio,
-        t.nombre,
-        t.direccion,
-        t.cant_unidades_funcionales,
-        t.m2_totales
-    FROM consorcio.consorcio_temp AS t
-    -- Prevenir duplicados en la tabla final consorcio.consorcio
-    WHERE NOT EXISTS (
-        SELECT 1 
-        FROM consorcio.consorcio c 
-        WHERE c.idConsorcio = CAST(REPLACE(t.nro_consorcio_excel, 'Consorcio ', '') AS INT)
-    );
+    IF OBJECT_ID('tempdb..#stg_Num', 'U') IS NOT NULL
+        DROP TABLE #stg_Num;
 
+    SELECT 
+        ROW_NUMBER() OVER (ORDER BY stg_nroConsorcioExcel) AS rn,
+        stg_nroConsorcioExcel,
+        stg_nombre,
+        stg_direccion,
+        stg_cantidadUnidadesFuncionales,
+        stg_metrosCuadradosTotales
+    INTO #stg_Num
+    FROM #stg_consorcio;
+
+    DECLARE @i INT = 1;
+    DECLARE @max INT;
+    SELECT @max = MAX(rn) FROM #stg_Num;
+
+    -------------------------------------------------------------------------
+    -- 4. Iterar y llamar al SP de inserción
+    -------------------------------------------------------------------------
+    WHILE @i <= @max
+    BEGIN
+        DECLARE @idConsorcio INT,
+                @nombre VARCHAR(50),
+                @direccion VARCHAR(50),
+                @cantidadUnidadesFuncionales INT,
+                @metrosCuadradosTotales INT;
+
+        SELECT 
+            @idConsorcio = CAST(REPLACE(stg_nroConsorcioExcel, 'Consorcio ', '') AS INT),
+            @nombre = stg_nombre,
+            @direccion = stg_direccion,
+            @cantidadUnidadesFuncionales = stg_cantidadUnidadesFuncionales,
+            @metrosCuadradosTotales = stg_metrosCuadradosTotales
+        FROM #stg_Num
+        WHERE rn = @i;
+
+        BEGIN TRY
+            EXEC consorcio.sp_insertarConsorcio 
+                @idConsorcio = @idConsorcio,
+                @nombre = @nombre,
+                @direccion = @direccion,
+                @cantidadUnidadesFuncionales = @cantidadUnidadesFuncionales,
+                @metrosCuadradosTotales = @metrosCuadradosTotales;
+        END TRY
+        BEGIN CATCH
+            PRINT 'Error al insertar consorcio con ID ' 
+                  + CAST(@idConsorcio AS VARCHAR) + ': ' + ERROR_MESSAGE();
+        END CATCH;
+
+        SET @i += 1;
+    END;
+
+    -------------------------------------------------------------------------
+    -- 5. Limpiar staging
+    -------------------------------------------------------------------------
+    DROP TABLE #stg_Num;
+    DROP TABLE #stg_consorcio;
 END;
 GO
 
@@ -120,92 +157,152 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    BEGIN TRY
-        IF OBJECT_ID('tempdb..#TempUF') IS NOT NULL
-            DROP TABLE #TempUF;
-        CREATE TABLE #TempUF (
-            nombreConsorcio NVARCHAR(100),
-            numeroUnidadFuncional NVARCHAR(10),
-            piso CHAR(2),
-            departamento CHAR(1),
-            coeficiente NVARCHAR(10),
-            metrosCuadrados NVARCHAR(10),
-            bauleras NVARCHAR(2),
-            cochera NVARCHAR(2),
-            m2_baulera NVARCHAR(10),
-            m2_cochera NVARCHAR(10)
-        );
+    -------------------------------------------------------------------------
+    -- 1. Crear tabla staging
+    -------------------------------------------------------------------------
+    IF OBJECT_ID('tempdb..#stg_unidadesFuncionales', 'U') IS NOT NULL
+        DROP TABLE #stg_unidadesFuncionales;
 
-        DECLARE @sql NVARCHAR(MAX);
-        SET @sql = N'
-            BULK INSERT #TempUF
-            FROM ''' + @path + N'''
-            WITH (
-                FIRSTROW = 2,
-                FIELDTERMINATOR = ''\t'',
-                ROWTERMINATOR = ''\n'',
-                CODEPAGE = ''65001'',
-                DATAFILETYPE = ''char''
-            );';
-        EXEC sp_executesql @sql;
+    CREATE TABLE #stg_unidadesFuncionales (
+        stg_nombreConsorcio NVARCHAR(100),
+        stg_numeroUnidadFuncional NVARCHAR(10),
+        stg_piso CHAR(2),
+        stg_departamento CHAR(1),
+        stg_coeficiente NVARCHAR(10),
+        stg_metrosCuadrados NVARCHAR(10),
+        stg_bauleras NVARCHAR(2),
+        stg_cochera NVARCHAR(2),
+        stg_m2_baulera NVARCHAR(10),
+        stg_m2_cochera NVARCHAR(10)
+    );
 
-        INSERT INTO consorcio.unidad_funcional
-            (idConsorcio, cuentaOrigen, numeroUnidadFuncional, piso, departamento, coeficiente, metrosCuadrados)
+    -------------------------------------------------------------------------
+    -- 2. Cargar archivo con BULK INSERT
+    -------------------------------------------------------------------------
+    DECLARE @sql NVARCHAR(MAX);
+    SET @sql = N'
+        BULK INSERT #stg_unidadesFuncionales
+        FROM ''' + @path + N'''
+        WITH (
+            FIRSTROW = 2,
+            FIELDTERMINATOR = ''\t'',
+            ROWTERMINATOR = ''\n'',
+            CODEPAGE = ''65001'',
+            DATAFILETYPE = ''char''
+        );';
+    EXEC sp_executesql @sql;
+
+    -------------------------------------------------------------------------
+    -- 3. Crear tabla numerada para iterar
+    -------------------------------------------------------------------------
+    IF OBJECT_ID('tempdb..#stg_Num', 'U') IS NOT NULL
+        DROP TABLE #stg_Num;
+
+    SELECT
+        ROW_NUMBER() OVER (ORDER BY stg_nombreConsorcio, stg_numeroUnidadFuncional) AS rn,
+        stg_nombreConsorcio,
+        stg_numeroUnidadFuncional,
+        stg_piso,
+        stg_departamento,
+        stg_coeficiente,
+        stg_metrosCuadrados,
+        stg_bauleras,
+        stg_cochera,
+        stg_m2_baulera,
+        stg_m2_cochera
+    INTO #stg_Num
+    FROM #stg_unidadesFuncionales;
+
+    DECLARE @i INT = 1;
+    DECLARE @max INT;
+    SELECT @max = MAX(rn) FROM #stg_Num;
+
+    -------------------------------------------------------------------------
+    -- 4. Iterar y llamar a SPs de inserción
+    -------------------------------------------------------------------------
+    WHILE @i <= @max
+    BEGIN
+        DECLARE 
+            @nombreConsorcio NVARCHAR(100),
+            @numeroUnidadFuncional INT,
+            @piso CHAR(2),
+            @departamento CHAR(1),
+            @coeficiente DECIMAL(5,2),
+            @metrosCuadrados INT,
+            @bauleras NVARCHAR(2),
+            @cochera NVARCHAR(2),
+            @m2_baulera INT,
+            @m2_cochera INT,
+            @idConsorcio INT,
+            @idUFCreada INT,
+            @idCochera INT,
+            @idBaulera INT;
+
+        -- Obtener fila actual y castear
         SELECT
-            c.idConsorcio,
-            ROW_NUMBER() OVER(PARTITION BY c.idConsorcio ORDER BY t.numeroUnidadFuncional) AS cuentaOrigen,
-            TRY_CAST(t.numeroUnidadFuncional AS INT),
-            t.piso,
-            t.departamento,
-            TRY_CAST(REPLACE(t.coeficiente, ',', '.') AS DECIMAL(5,2)),
-            TRY_CAST(t.metrosCuadrados AS INT)
-        FROM #TempUF t
-        INNER JOIN consorcio.consorcio c
-            ON LTRIM(RTRIM(c.nombre)) = LTRIM(RTRIM(t.nombreConsorcio))
-        WHERE NOT EXISTS (
-            SELECT 1
-            FROM consorcio.unidad_funcional uf
-            WHERE uf.idConsorcio = c.idConsorcio
-              AND uf.piso = t.piso
-              AND uf.departamento = t.departamento
-        );
+            @nombreConsorcio = stg_nombreConsorcio,
+            @numeroUnidadFuncional = TRY_CAST(stg_numeroUnidadFuncional AS INT),
+            @piso = stg_piso,
+            @departamento = stg_departamento,
+            @coeficiente = TRY_CAST(REPLACE(stg_coeficiente, ',', '.') AS DECIMAL(5,2)),
+            @metrosCuadrados = TRY_CAST(stg_metrosCuadrados AS INT),
+            @bauleras = stg_bauleras,
+            @cochera = stg_cochera,
+            @m2_baulera = TRY_CAST(REPLACE(stg_m2_baulera, ',', '.') AS INT),
+            @m2_cochera = TRY_CAST(REPLACE(stg_m2_cochera, ',', '.') AS INT)
+        FROM #stg_Num
+        WHERE rn = @i;
 
-        INSERT INTO consorcio.cochera (idUnidadFuncional, metrosCuadrados, coeficiente)
-        SELECT
-            uf.idUnidadFuncional,
-            TRY_CAST(REPLACE(t.m2_cochera, ',', '.') AS INT),
-            TRY_CAST(REPLACE(t.coeficiente, ',', '.') AS DECIMAL(5,2))
-        FROM #TempUF t
-        INNER JOIN consorcio.consorcio c
-            ON LTRIM(RTRIM(c.nombre)) = LTRIM(RTRIM(t.nombreConsorcio))
-        INNER JOIN consorcio.unidad_funcional uf
-            ON uf.idConsorcio = c.idConsorcio
-           AND uf.piso = t.piso
-           AND uf.departamento = t.departamento
-        WHERE t.cochera = 'SI' AND TRY_CAST(REPLACE(t.m2_cochera, ',', '.') AS INT) > 0;
+        -- Obtener idConsorcio
+        SELECT @idConsorcio = idConsorcio
+        FROM consorcio.consorcio
+        WHERE LTRIM(RTRIM(nombre)) = LTRIM(RTRIM(@nombreConsorcio));
 
-        INSERT INTO consorcio.baulera (idUnidadFuncional, metrosCuadrados, coeficiente)
-        SELECT
-            uf.idUnidadFuncional,
-            TRY_CAST(REPLACE(t.m2_baulera, ',', '.') AS INT),
-            TRY_CAST(REPLACE(t.coeficiente, ',', '.') AS DECIMAL(5,2))
-        FROM #TempUF t
-        INNER JOIN consorcio.consorcio c
-            ON LTRIM(RTRIM(c.nombre)) = LTRIM(RTRIM(t.nombreConsorcio))
-        INNER JOIN consorcio.unidad_funcional uf
-            ON uf.idConsorcio = c.idConsorcio
-           AND uf.piso = t.piso
-           AND uf.departamento = t.departamento
-        WHERE t.bauleras = 'SI' AND TRY_CAST(REPLACE(t.m2_baulera, ',', '.') AS INT) > 0;
+        IF @idConsorcio IS NOT NULL
+        BEGIN
+            -- Insertar Unidad Funcional
+            EXEC consorcio.sp_insertarUnidadFuncional
+                @idConsorcio = @idConsorcio,
+                @cuentaOrigen = 0,
+                @numeroUnidadFuncional = @numeroUnidadFuncional,
+                @piso = @piso,
+                @departamento = @departamento,
+                @coeficiente = @coeficiente,
+                @metrosCuadrados = @metrosCuadrados,
+                @idUFCreada = @idUFCreada OUTPUT;
 
-        DROP TABLE #TempUF;
+            -- Insertar cochera si corresponde
+            IF @cochera = 'SI' AND @m2_cochera > 0
+            BEGIN
+                EXEC consorcio.sp_insertarCochera
+                    @idUnidadFuncional = @idUFCreada,
+                    @metrosCuadrados = @m2_cochera,
+                    @coeficiente = @coeficiente,
+                    @idCocheraCreada = @idCochera OUTPUT;
+            END
 
-    END TRY
-    BEGIN CATCH
-        PRINT ERROR_MESSAGE();
-    END CATCH
+            -- Insertar baulera si corresponde
+            IF @bauleras = 'SI' AND @m2_baulera > 0
+            BEGIN
+                EXEC consorcio.sp_insertarBaulera
+                    @idUnidadFuncional = @idUFCreada,
+                    @metrosCuadrados = @m2_baulera,
+                    @coeficiente = @coeficiente,
+                    @idBauleraCreada = @idBaulera OUTPUT;
+            END
+        END
+
+        SET @i = @i + 1;
+    END
+
+    -------------------------------------------------------------------------
+    -- 5. Limpiar staging
+    -------------------------------------------------------------------------
+    DROP TABLE #stg_Num;
+    DROP TABLE #stg_unidadesFuncionales;
 END;
 GO
+
 
 --------------------------------------------------------------------------------
 -- NUMERO: 3
@@ -213,12 +310,14 @@ GO
 -- PROCEDIMIENTO: Importar cuentas origen para las UF ya creadas
 --------------------------------------------------------------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_unidades_funcionales_csv
-    @path NVARCHAR(255) -- Ruta a Inquilino-propietarios-UF.csv
+    @path NVARCHAR(255)
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- 1. Crear tabla temporal de staging
+    -------------------------------------------------------------------------
+    -- 1. Crear tabla staging
+    -------------------------------------------------------------------------
     IF OBJECT_ID('tempdb..#tempUF_CSV', 'U') IS NOT NULL
         DROP TABLE #tempUF_CSV;
 
@@ -230,9 +329,11 @@ BEGIN
         stg_departamento       NVARCHAR(10)
     );
 
-    -- 2. Cargar datos del CSV
-    DECLARE @BulkSqlCmd NVARCHAR(MAX);
-    SET @BulkSqlCmd = N'
+    -------------------------------------------------------------------------
+    -- 2. Cargar archivo con BULK INSERT
+    -------------------------------------------------------------------------
+    DECLARE @sql NVARCHAR(MAX);
+    SET @sql = N'
         BULK INSERT #tempUF_CSV
         FROM ''' + @path + '''
         WITH
@@ -243,26 +344,58 @@ BEGIN
             FIRSTROW = 2
         );
     ';
-    EXEC sp_executesql @BulkSqlCmd;
+    EXEC sp_executesql @sql;
 
-    -- 3. ACTUALIZAR la tabla final
-    UPDATE uf
-    SET
-        -- Actualizamos la cuentaOrigen con el CVU/CBU del archivo
-        uf.cuentaOrigen = CAST(TRIM(t.stg_cvu_cbu) AS CHAR(22))
-    FROM
-        consorcio.unidad_funcional AS uf
-    INNER JOIN
-        consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio
-    INNER JOIN
-        #tempUF_CSV AS t ON 
-            TRIM(t.stg_nombre_consorcio) = c.nombre
-            AND TRIM(t.stg_piso) = uf.piso
-            AND TRIM(t.stg_departamento) = uf.departamento
-    WHERE
-        -- Solo actualizamos las que tienen la cuentaOrigen incorrecta (ROW_NUMBER)
-        ISNUMERIC(uf.cuentaOrigen) = 1 AND uf.cuentaOrigen != CAST(TRIM(t.stg_cvu_cbu) AS CHAR(22));
-    
+    -------------------------------------------------------------------------
+    -- 3. Crear tabla numerada para iterar
+    -------------------------------------------------------------------------
+    IF OBJECT_ID('tempdb..#tempUF_Num', 'U') IS NOT NULL
+        DROP TABLE #tempUF_Num;
+
+    SELECT 
+        ROW_NUMBER() OVER (ORDER BY t.stg_nombre_consorcio, t.stg_piso, t.stg_departamento) AS rn,
+        uf.idUnidadFuncional,
+        CAST(TRIM(t.stg_cvu_cbu) AS VARCHAR(22)) AS cuentaOrigen
+    INTO #tempUF_Num
+    FROM consorcio.unidad_funcional AS uf
+    INNER JOIN consorcio.consorcio AS c
+        ON uf.idConsorcio = c.idConsorcio
+    INNER JOIN #tempUF_CSV AS t
+        ON TRIM(t.stg_nombre_consorcio) = c.nombre
+        AND TRIM(t.stg_piso) = uf.piso
+        AND TRIM(t.stg_departamento) = uf.departamento
+    WHERE ISNUMERIC(uf.cuentaOrigen) = 1
+      AND uf.cuentaOrigen != CAST(TRIM(t.stg_cvu_cbu) AS CHAR(22));
+
+    -------------------------------------------------------------------------
+    -- 4. Iterar y llamar a SPs de modificacion
+    -------------------------------------------------------------------------
+    DECLARE @i INT = 1;
+    DECLARE @max INT;
+    DECLARE @idUF INT;
+    DECLARE @cuentaOrigen VARCHAR(22);
+
+    SELECT @max = MAX(rn) FROM #tempUF_Num;
+
+    WHILE @i <= @max
+    BEGIN
+        SELECT 
+            @idUF = idUnidadFuncional,
+            @cuentaOrigen = cuentaOrigen
+        FROM #tempUF_Num
+        WHERE rn = @i;
+
+        EXEC consorcio.sp_modificarUnidadFuncional
+            @idUnidadFuncional = @idUF,
+            @cuentaOrigen = @cuentaOrigen;
+
+        SET @i = @i + 1;
+    END
+
+    -------------------------------------------------------------------------
+    -- 5. Limpiar staging
+    -------------------------------------------------------------------------
+    DROP TABLE #tempUF_Num;
     DROP TABLE #tempUF_CSV;
 END;
 GO
@@ -272,205 +405,151 @@ GO
 -- ARCHIVO: inquilino-propietarios-datos.csv
 -- PROCEDIMIENTO: Importar personas y su relacion con las unidades funcionales (persona_unidad_funcional)
 --------------------------------------------------------------------------------
-CREATE OR ALTER PROCEDURE consorcio.SP_importar_personas
+CREATE OR ALTER PROCEDURE consorcio.SP_importar_personas_csv
     @path NVARCHAR(255)
 AS
 BEGIN
-    -- Declaración de variables necesarias
-    DECLARE @sqlBulkInsert NVARCHAR(MAX);
-    DECLARE @ErrorMessage NVARCHAR(4000);
-    DECLARE @ErrorSeverity INT;
-    DECLARE @ErrorState INT;
-    
-    -- Iniciar la transacción para asegurar atomicidad
-    BEGIN TRANSACTION
-    
-    BEGIN TRY
-        
-        -- 1. CREAR TABLA TEMPORAL (MODIFICADA: Col7_Inquilino es DECIMAL)
-        IF OBJECT_ID('tempdb..#temporal') IS NOT NULL
-            DROP TABLE #temporal;
-            
-        CREATE TABLE #temporal (
-            Col1_Nombre         VARCHAR(100),
-            Col2_Apellido       VARCHAR(100),
-            Col3_DNI            VARCHAR(50),
-            Col4_Email          VARCHAR(100),
-            Col5_Telefono       VARCHAR(50),
-            Col6_CuentaOrigen   CHAR(22),
-            Col7_Inquilino      DECIMAL(2, 0) -- <--- CAMBIO A DECIMAL(2, 0)
+    SET NOCOUNT ON;
+
+    -------------------------------------------------------------------------
+    -- 1. Crear tabla staging
+    -------------------------------------------------------------------------
+    IF OBJECT_ID('tempdb..#personas_CSV', 'U') IS NOT NULL
+        DROP TABLE #personas_CSV;
+
+    CREATE TABLE #personas_CSV (
+        stg_nombre       NVARCHAR(100),
+        stg_apellido     NVARCHAR(100),
+        stg_dni          NVARCHAR(50),
+        stg_email        NVARCHAR(100),
+        stg_telefono     NVARCHAR(50),
+        stg_cuentaOrigen NVARCHAR(22),
+        stg_inquilino    NVARCHAR(2) -- 1=inquilino, 0=propietario
+    );
+
+    -------------------------------------------------------------------------
+    -- 2. Cargar archivo CSV con BULK INSERT
+    -------------------------------------------------------------------------
+    DECLARE @sql NVARCHAR(MAX);
+    SET @sql = N'
+        BULK INSERT #personas_CSV
+        FROM ''' + @path + '''
+        WITH
+        (
+            FIELDTERMINATOR = '';'',
+            ROWTERMINATOR = ''0x0A'',
+            CODEPAGE = ''1252'',
+            FIRSTROW = 2
         );
-        
-        ---
-        
-        -- 2. CARGAR CSV (ÚNICO BLOQUE DINÁMICO)
-        SET @sqlBulkInsert = '
-            BULK INSERT #temporal
-            FROM ''' + @path + '''
-            WITH (
-                FIELDTERMINATOR = '';'',
-                ROWTERMINATOR = ''0x0A'',
-                FIRSTROW = 2,
-                CODEPAGE = ''1252''
-            );
-        ';
-        
-        EXEC sp_executesql @sqlBulkInsert;
+    ';
+    EXEC sp_executesql @sql;
 
-        ---
-        
-        -- 3. INSERTAR EN consorcio.persona (ESTÁTICO)
-        WITH DatosLimpios AS (
-            SELECT  
-                -- Limpieza de Nombre
-                RTRIM(
-                    (
-                        SELECT  
-                            UPPER(LEFT(value, 1)) + LOWER(SUBSTRING(value, 2, LEN(value))) + ' '
-                        FROM STRING_SPLIT(
-                            LTRIM(RTRIM(
-                                REPLACE(REPLACE(REPLACE(t.Col1_Nombre, '‚', 'é'), '¥', 'ñ'), '¡', 'í') 
-                            )), ' '
-                        )
-                        FOR XML PATH(''), TYPE
-                    ).value('.', 'NVARCHAR(MAX)')
-                ) AS nombre,
+    -------------------------------------------------------------------------
+    -- 3. Crear tabla numerada con limpieza y casteos
+    -------------------------------------------------------------------------
+    IF OBJECT_ID('tempdb..#personas_Num', 'U') IS NOT NULL
+        DROP TABLE #personas_Num;
 
-                -- Limpieza de Apellido
-                RTRIM(
-                    (
-                        SELECT  
-                            UPPER(LEFT(value, 1)) + LOWER(SUBSTRING(value, 2, LEN(value))) + ' '
-                        FROM STRING_SPLIT(
-                            LTRIM(RTRIM(
-                                REPLACE(REPLACE(REPLACE(t.Col2_Apellido, '‚', 'é'), '¥', 'ñ'), '¡', 'í') 
-                            )), ' '
-                        )
-                        FOR XML PATH(''), TYPE
-                    ).value('.', 'NVARCHAR(MAX)')
-                ) AS apellido,
+    SELECT
+        ROW_NUMBER() OVER (ORDER BY stg_dni) AS rn,
+        -- Limpieza de strings y casteos
+        RTRIM((
+            SELECT UPPER(LEFT(s.value,1)) + LOWER(SUBSTRING(s.value,2,LEN(s.value))) + ' '
+            FROM STRING_SPLIT(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(stg_nombre)), '‚','é'), '¥','ñ'), '¡','í'), ' ') s
+            FOR XML PATH(''), TYPE
+        ).value('.', 'NVARCHAR(MAX)')) AS nombre,
+        RTRIM((
+            SELECT UPPER(LEFT(s.value,1)) + LOWER(SUBSTRING(s.value,2,LEN(s.value))) + ' '
+            FROM STRING_SPLIT(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(stg_apellido)), '‚','é'), '¥','ñ'), '¡','í'), ' ') s
+            FOR XML PATH(''), TYPE
+        ).value('.', 'NVARCHAR(MAX)')) AS apellido,
+        CAST(LTRIM(RTRIM(stg_dni)) AS INT) AS dni,
+        LOWER(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(stg_email)), '‚','é'),'¥','ñ'),'¡','í')) AS email,
+        LTRIM(RTRIM(stg_telefono)) AS telefono,
+        LTRIM(RTRIM(stg_cuentaOrigen)) AS cuentaOrigen,
+        CASE WHEN stg_inquilino = '1' THEN 'inquilino' ELSE 'propietario' END AS rol
+    INTO #personas_Num
+    FROM #personas_CSV
+    WHERE ISNUMERIC(LTRIM(RTRIM(stg_dni))) = 1;
 
-                -- DNI en entero
-                CAST(LTRIM(RTRIM(t.Col3_DNI)) AS INT) AS dni,
+    -------------------------------------------------------------------------
+    -- 4. Iterar y llamar a SPs de ABM
+    -------------------------------------------------------------------------
+    DECLARE @i INT = 1;
+    DECLARE @max INT;
+    DECLARE @idPersona INT;
+    DECLARE @nombre NVARCHAR(100);
+    DECLARE @apellido NVARCHAR(100);
+    DECLARE @dni INT;
+    DECLARE @email NVARCHAR(100);
+    DECLARE @telefono NVARCHAR(50);
+    DECLARE @cuentaOrigen NVARCHAR(22);
+    DECLARE @rol NVARCHAR(15);
+    DECLARE @idUF INT;
 
-                -- Email limpiado
-                LOWER(
-                    REPLACE(
-                        REPLACE(
-                            REPLACE(
-                                LTRIM(RTRIM(
-                                    REPLACE(REPLACE(REPLACE(t.Col4_Email, '‚', 'é'), '¥', 'ñ'), '¡', 'í') 
-                                )),
-                                ' ', '_'
-                            ),
-                            '__', '_'
-                        ),
-                        '_@', '@'
-                    )
-                ) AS email,
+    SELECT @max = MAX(rn) FROM #personas_Num;
 
-                -- Teléfono y cuenta origen
-                LTRIM(RTRIM(t.Col5_Telefono)) AS telefono,
-                LTRIM(RTRIM(t.Col6_CuentaOrigen)) AS cuentaOrigen,
-                
-                -- Deduplicación
-                ROW_NUMBER() OVER (PARTITION BY t.Col3_DNI ORDER BY t.Col1_Nombre) as rn
-            FROM #temporal t
-            WHERE 
-                ISNUMERIC(LTRIM(RTRIM(t.Col3_DNI))) = 1
-                AND LTRIM(RTRIM(t.Col3_DNI)) <> ''
-        )
-        
-        INSERT INTO consorcio.persona (
-            nombre, apellido, dni, email, telefono, cuentaOrigen
-        )
-        SELECT  
-            dl.nombre, dl.apellido, dl.dni, dl.email, dl.telefono, dl.cuentaOrigen
-        FROM DatosLimpios dl
-        WHERE
-            dl.rn = 1
-            AND NOT EXISTS (
-                SELECT 1 
-                FROM consorcio.persona p 
-                WHERE p.dni = dl.dni
-            );
-
-        ---
-        
-        -- 4. INSERTAR RELACIONES EN consorcio.persona_unidad_funcional (ESTÁTICO)
-        INSERT INTO consorcio.persona_unidad_funcional (idPersona, idUnidadFuncional, rol)
+    WHILE @i <= @max
+    BEGIN
         SELECT
-            p.idPersona,
-            uf.idUnidadFuncional,
-            -- ASIGNACIÓN DE ROL SIMPLE CON COMPARACIÓN NUMÉRICA (1 para inquilino, 0 para propietario)
-            CASE  
-                WHEN t.Col7_Inquilino = 1 THEN 'inquilino'
-                ELSE 'propietario'
-            END AS rol
-        FROM #temporal t      
-        
-        INNER JOIN consorcio.persona p  
-            ON p.dni = CAST(LTRIM(RTRIM(t.Col3_DNI)) AS INT)
-        
-        INNER JOIN consorcio.unidad_funcional uf
-            ON uf.cuentaOrigen = LTRIM(RTRIM(t.Col6_CuentaOrigen))
-        
-        -- FILTRO DE DNI Y VALIDACIÓN DE EXISTENCIA DE RELACIÓN
-        WHERE 
-            ISNUMERIC(LTRIM(RTRIM(t.Col3_DNI))) = 1 AND LTRIM(RTRIM(t.Col3_DNI)) <> ''
-            
-            AND NOT EXISTS (
-                SELECT 1 
-                FROM consorcio.persona_unidad_funcional puf
-                WHERE puf.idUnidadFuncional = uf.idUnidadFuncional
-                -- Lógica de deduplicación también usa la comparación numérica simple
-                AND puf.rol = CASE  
-                                  WHEN t.Col7_Inquilino = 1 THEN 'inquilino'
-                                  ELSE 'propietario'
-                              END
-            );
-        
-        ---
-        
-        -- 5. ÉXITO Y COMMIT
-        COMMIT TRANSACTION
-        
-        -- 6. LIMPIEZA DE TABLA TEMPORAL
-        IF OBJECT_ID('tempdb..#temporal') IS NOT NULL
-            DROP TABLE #temporal;
-            
-        SELECT 'Importación de datos de persona y relaciones completada con éxito. La columna Inquilino se cargó como DECIMAL(2, 0), permitiendo una asignación de rol simple: **1 = inquilino, 0 = propietario**.' AS Resultado;
+            @nombre = nombre,
+            @apellido = apellido,
+            @dni = dni,
+            @email = email,
+            @telefono = telefono,
+            @cuentaOrigen = cuentaOrigen,
+            @rol = rol
+        FROM #personas_Num
+        WHERE rn = @i;
 
-    END TRY
-    BEGIN CATCH
-        
-        -- 5. MANEJO DE ERROR Y ROLLBACK
-        IF @@TRANCOUNT > 0
-            ROLLBACK TRANSACTION;
+        -- Insertar persona
+        BEGIN TRY
+            EXEC consorcio.sp_insertarPersona
+                @nombre = @nombre,
+                @apellido = @apellido,
+                @dni = @dni,
+                @email = @email,
+                @telefono = @telefono,
+                @cuentaOrigen = @cuentaOrigen,
+                @idPersonaCreada = @idPersona OUTPUT;
+        END TRY
+        BEGIN CATCH
+            PRINT 'Error al insertar persona con DNI: ' + CAST(@dni AS VARCHAR);
+        END CATCH
 
-        SELECT 
-            @ErrorMessage = ERROR_MESSAGE(), 
-            @ErrorSeverity = ERROR_SEVERITY(), 
-            @ErrorState = ERROR_STATE();
+        -- Asignar persona a UF
+        SELECT @idUF = idUnidadFuncional
+        FROM consorcio.unidad_funcional
+        WHERE cuentaOrigen = @cuentaOrigen AND fechaBaja IS NULL;
 
-        -- 6. LIMPIEZA DE TABLA TEMPORAL EN CASO DE ERROR
-        IF OBJECT_ID('tempdb..#temporal') IS NOT NULL
-            DROP TABLE #temporal;
-            
-        SELECT
-            'Error al importar los datos. La tabla temporal fue limpiada y la transacción revertida.' AS Resultado,
-            ERROR_NUMBER() AS ErrorNumber,
-            @ErrorMessage AS ErrorMessage,
-            ERROR_LINE() AS ErrorLine;
+        IF @idUF IS NOT NULL
+        BEGIN
+            BEGIN TRY
+                EXEC consorcio.sp_insertarPersonaUF
+                    @idPersona = @idPersona,
+                    @idUnidadFuncional = @idUF,
+                    @rol = @rol;
+            END TRY
+            BEGIN CATCH
+                PRINT 'Error al asignar persona a UF: ' + CAST(@idPersona AS VARCHAR) + ' -> ' + CAST(@idUF AS VARCHAR);
+            END CATCH
+        END
+        ELSE
+        BEGIN
+            PRINT 'No se encontró UF para cuentaOrigen: ' + @cuentaOrigen;
+        END
 
-        THROW;
-        RETURN 1;
+        SET @i = @i + 1;
+    END
 
-    END CATCH
-
-    RETURN 0;
-END
+    -------------------------------------------------------------------------
+    -- 5. Limpiar staging
+    -------------------------------------------------------------------------
+    DROP TABLE #personas_Num;
+    DROP TABLE #personas_CSV;
+END;
 GO
+
 
 --------------------------------------------------------------------------------
 -- NUMERO: 5
@@ -483,6 +562,9 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    -------------------------------------------------------------------------
+    -- 1. Crear tabla staging
+    -------------------------------------------------------------------------
     CREATE TABLE #pago_staging (
         stg_idPago      NVARCHAR(50),
         stg_fecha       NVARCHAR(50),
@@ -490,9 +572,11 @@ BEGIN
         stg_valor       NVARCHAR(50)
     );
 
-    DECLARE @BulkSqlCmd NVARCHAR(MAX);
-
-    SET @BulkSqlCmd = N'
+    -------------------------------------------------------------------------
+    -- 2. Cargar archivo CSV con BULK INSERT
+    -------------------------------------------------------------------------
+    DECLARE @sql NVARCHAR(MAX);
+    SET @sql = N'
         BULK INSERT #pago_staging
         FROM ''' + @path + '''
         WITH
@@ -503,31 +587,65 @@ BEGIN
             FIRSTROW = 2
         );
     ';
+    EXEC sp_executesql @sql;
 
-    EXEC sp_executesql @BulkSqlCmd;
+    -------------------------------------------------------------------------
+    -- 3. Crear tabla numerada
+    -------------------------------------------------------------------------
+    IF OBJECT_ID('tempdb..#pago_Num', 'U') IS NOT NULL
+        DROP TABLE #pago_Num;
 
-    INSERT INTO consorcio.pago (
-        idPago,
-        fecha,
-        cuentaOrigen,
-        importe,
-        estaAsociado
-    )
-    SELECT
-        CAST(TRIM(stg_idPago) AS INT),
-        CONVERT(DATE, stg_fecha, 103),
-        CAST(TRIM(stg_cvu_cbu) AS CHAR(22)),
-        CAST(
-            REPLACE(TRIM(stg_valor), '$', '')
-            AS DECIMAL(12,3)
-        ),
-        0
-    FROM
-        #pago_staging
-    WHERE
-        stg_idPago IS NOT NULL
-        AND ISNUMERIC(REPLACE(TRIM(stg_valor), '$', '')) = 1;
+    SELECT 
+        ROW_NUMBER() OVER (ORDER BY stg_idPago) AS rn,
+        stg_idPago, stg_fecha, stg_cvu_cbu, stg_valor
+    INTO #pago_Num
+    FROM #pago_staging
+    WHERE stg_idPago IS NOT NULL AND ISNUMERIC(stg_idPago) = 1;
 
+    DECLARE @i INT = 1;
+    DECLARE @max INT;
+    SELECT @max = MAX(rn) FROM #pago_Num;
+
+    -------------------------------------------------------------------------
+    -- 4. Iterar y llamar a SPs de ABM
+    -------------------------------------------------------------------------
+    WHILE @i <= @max
+    BEGIN
+        DECLARE @idPago INT,
+                @fecha DATE,
+                @cuentaOrigen CHAR(22),
+                @importe DECIMAL(13,3),
+                @estaAsociado BIT = 0; -- por default 0
+
+        SELECT 
+            @idPago = CAST(stg_idPago AS INT),
+            @fecha = TRY_CONVERT(DATE, stg_fecha, 103),
+            @cuentaOrigen = CAST(LTRIM(RTRIM(stg_cvu_cbu)) AS CHAR(22)),
+            @importe = CAST(REPLACE(LTRIM(RTRIM(stg_valor)),'$','') AS DECIMAL(13,3))
+        FROM #pago_Num
+        WHERE rn = @i;
+
+        BEGIN TRY
+            EXEC consorcio.sp_insertarPago
+                @idPago = @idPago,
+                @cuentaOrigen = @cuentaOrigen,
+                @importe = @importe,
+                @estaAsociado = @estaAsociado,
+                @fecha = @fecha;
+        END TRY
+        BEGIN CATCH
+            PRINT 'Error al insertar pago con ID: ' + CAST(@idPago AS VARCHAR);
+        END CATCH
+
+        SET @i = @i + 1;
+    END
+
+    -------------------------------------------------------------------------
+    -- 5. Limpiar staging
+    -------------------------------------------------------------------------
+    DROP TABLE #pago_Num;
     DROP TABLE #pago_staging;
-END
+
+    PRINT 'Importación de pagos completada.';
+END;
 GO
