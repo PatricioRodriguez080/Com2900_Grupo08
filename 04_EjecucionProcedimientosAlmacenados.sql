@@ -91,3 +91,11 @@ SELECT * FROM consorcio.gasto_ordinario
 EXEC consorcio.SP_importar_proveedores_excel @path = 'C:\Archivos para el TP\datos varios.xlsx';
 
 SELECT * FROM consorcio.proveedor
+
+--------------------------------------------------------------------------------
+-- NUMERO: 7
+-- PROCEDIMIENTO: Cargar Estado financiero
+--------------------------------------------------------------------------------
+EXEC consorcio.SP_cargar_estado_financiero
+
+SELECT * FROM consorcio.estado_financiero
