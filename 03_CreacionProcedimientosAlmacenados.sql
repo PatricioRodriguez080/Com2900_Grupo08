@@ -143,21 +143,24 @@ BEGIN
     SET NOCOUNT ON;
 
     BEGIN TRY
+        -- Creamos tabla temporal
         IF OBJECT_ID('tempdb..#TempUF') IS NOT NULL
             DROP TABLE #TempUF;
+
         CREATE TABLE #TempUF (
-            nombreConsorcio NVARCHAR(100),
-            numeroUnidadFuncional NVARCHAR(10),
+            nombreConsorcio VARCHAR(100),
+            numeroUnidadFuncional VARCHAR(10),
             piso CHAR(2),
             departamento CHAR(1),
-            coeficiente NVARCHAR(10),
-            metrosCuadrados NVARCHAR(10),
-            bauleras NVARCHAR(2),
-            cochera NVARCHAR(2),
-            m2_baulera NVARCHAR(10),
-            m2_cochera NVARCHAR(10)
+            coeficiente VARCHAR(10),
+            metrosCuadrados VARCHAR(10),
+            bauleras VARCHAR(2),
+            cochera VARCHAR(2),
+            m2_baulera VARCHAR(10),
+            m2_cochera VARCHAR(10)
         );
 
+        -- Cargamos datos del archivo con BULK INSERT
         DECLARE @sql NVARCHAR(MAX);
         SET @sql = N'
             BULK INSERT #TempUF
@@ -171,63 +174,96 @@ BEGIN
             );';
         EXEC sp_executesql @sql;
 
-        INSERT INTO consorcio.unidad_funcional
-            (idConsorcio, cuentaOrigen, numeroUnidadFuncional, piso, departamento, coeficiente, metrosCuadrados)
-        SELECT
-            c.idConsorcio,
-            ROW_NUMBER() OVER(PARTITION BY c.idConsorcio ORDER BY t.numeroUnidadFuncional) AS cuentaOrigen,
-            TRY_CAST(t.numeroUnidadFuncional AS INT),
-            t.piso,
-            t.departamento,
-            TRY_CAST(REPLACE(t.coeficiente, ',', '.') AS DECIMAL(5,2)),
-            TRY_CAST(t.metrosCuadrados AS INT)
-        FROM #TempUF t
-        INNER JOIN consorcio.consorcio c
-            ON LTRIM(RTRIM(c.nombre)) = LTRIM(RTRIM(t.nombreConsorcio))
-        WHERE NOT EXISTS (
-            SELECT 1
-            FROM consorcio.unidad_funcional uf
-            WHERE uf.idConsorcio = c.idConsorcio
-              AND uf.piso = t.piso
-              AND uf.departamento = t.departamento
-        );
+        -- Variables para iterar
+        DECLARE @RowCount INT, @Index INT = 1;
 
-        INSERT INTO consorcio.cochera (idUnidadFuncional, metrosCuadrados, coeficiente)
-        SELECT
-            uf.idUnidadFuncional,
-            TRY_CAST(REPLACE(t.m2_cochera, ',', '.') AS INT),
-            TRY_CAST(REPLACE(t.coeficiente, ',', '.') AS DECIMAL(5,2))
-        FROM #TempUF t
-        INNER JOIN consorcio.consorcio c
-            ON LTRIM(RTRIM(c.nombre)) = LTRIM(RTRIM(t.nombreConsorcio))
-        INNER JOIN consorcio.unidad_funcional uf
-            ON uf.idConsorcio = c.idConsorcio
-           AND uf.piso = t.piso
-           AND uf.departamento = t.departamento
-        WHERE t.cochera = 'SI' AND TRY_CAST(REPLACE(t.m2_cochera, ',', '.') AS INT) > 0;
+        SELECT @RowCount = COUNT(*) FROM #TempUF;
 
-        INSERT INTO consorcio.baulera (idUnidadFuncional, metrosCuadrados, coeficiente)
-        SELECT
-            uf.idUnidadFuncional,
-            TRY_CAST(REPLACE(t.m2_baulera, ',', '.') AS INT),
-            TRY_CAST(REPLACE(t.coeficiente, ',', '.') AS DECIMAL(5,2))
-        FROM #TempUF t
-        INNER JOIN consorcio.consorcio c
-            ON LTRIM(RTRIM(c.nombre)) = LTRIM(RTRIM(t.nombreConsorcio))
-        INNER JOIN consorcio.unidad_funcional uf
-            ON uf.idConsorcio = c.idConsorcio
-           AND uf.piso = t.piso
-           AND uf.departamento = t.departamento
-        WHERE t.bauleras = 'SI' AND TRY_CAST(REPLACE(t.m2_baulera, ',', '.') AS INT) > 0;
+        WHILE @Index <= @RowCount
+        BEGIN
+            -- Variables para la fila
+            DECLARE 
+                @nombreConsorcio NVARCHAR(100),
+                @numeroUnidadFuncional INT,
+                @piso CHAR(2),
+                @departamento CHAR(1),
+                @coeficiente DECIMAL(5,2),
+                @metrosCuadrados INT,
+                @bauleras NVARCHAR(2),
+                @cochera NVARCHAR(2),
+                @m2_baulera INT,
+                @m2_cochera INT,
+                @idConsorcio INT,
+                @idUFCreada INT,
+                @idCochera INT,
+                @idBaulera INT;
+
+            -- Obtener fila actual
+            SELECT 
+                @nombreConsorcio = nombreConsorcio,
+                @numeroUnidadFuncional = TRY_CAST(numeroUnidadFuncional AS INT),
+                @piso = piso,
+                @departamento = departamento,
+                @coeficiente = TRY_CAST(REPLACE(coeficiente, ',', '.') AS DECIMAL(5,2)),
+                @metrosCuadrados = TRY_CAST(metrosCuadrados AS INT),
+                @bauleras = bauleras,
+                @cochera = cochera,
+                @m2_baulera = TRY_CAST(REPLACE(m2_baulera, ',', '.') AS INT),
+                @m2_cochera = TRY_CAST(REPLACE(m2_cochera, ',', '.') AS INT)
+            FROM #TempUF
+            ORDER BY nombreConsorcio, numeroUnidadFuncional
+            OFFSET @Index - 1 ROWS FETCH NEXT 1 ROWS ONLY;
+
+            -- Obtener idConsorcio
+            SELECT @idConsorcio = idConsorcio 
+            FROM consorcio.consorcio 
+            WHERE LTRIM(RTRIM(nombre)) = LTRIM(RTRIM(@nombreConsorcio));
+
+            IF @idConsorcio IS NOT NULL
+            BEGIN
+                -- Insertar Unidad Funcional
+                EXEC consorcio.sp_insertarUnidadFuncional
+                    @idConsorcio = @idConsorcio,
+                    @cuentaOrigen = 0,
+                    @numeroUnidadFuncional = @numeroUnidadFuncional,
+                    @piso = @piso,
+                    @departamento = @departamento,
+                    @coeficiente = @coeficiente,
+                    @metrosCuadrados = @metrosCuadrados,
+                    @idUFCreada = @idUFCreada OUTPUT;
+
+                -- Insertar cochera si corresponde
+                IF @cochera = 'SI' AND @m2_cochera > 0
+                BEGIN
+                    EXEC consorcio.sp_insertarCochera
+                        @idUnidadFuncional = @idUFCreada,
+                        @metrosCuadrados = @m2_cochera,
+                        @coeficiente = @coeficiente,
+                        @idCocheraCreada = @idCochera OUTPUT;
+                END
+
+                -- Insertar baulera si corresponde
+                IF @bauleras = 'SI' AND @m2_baulera > 0
+                BEGIN
+                    EXEC consorcio.sp_insertarBaulera
+                        @idUnidadFuncional = @idUFCreada,
+                        @metrosCuadrados = @m2_baulera,
+                        @coeficiente = @coeficiente,
+                        @idBauleraCreada = @idBaulera OUTPUT;
+                END
+            END
+
+            SET @Index = @Index + 1;
+        END
 
         DROP TABLE #TempUF;
-
     END TRY
     BEGIN CATCH
-        PRINT ERROR_MESSAGE();
+        PRINT 'Error en el procedimiento de importación: ' + ERROR_MESSAGE();
     END CATCH
 END;
 GO
+
 
 --------------------------------------------------------------------------------
 -- NUMERO: 3
