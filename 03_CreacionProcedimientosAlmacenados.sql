@@ -527,6 +527,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    -- 1. Crear tabla staging
     CREATE TABLE #pago_staging (
         stg_idPago      NVARCHAR(50),
         stg_fecha       NVARCHAR(50),
@@ -534,8 +535,8 @@ BEGIN
         stg_valor       NVARCHAR(50)
     );
 
+    -- 2. Cargar CSV
     DECLARE @BulkSqlCmd NVARCHAR(MAX);
-
     SET @BulkSqlCmd = N'
         BULK INSERT #pago_staging
         FROM ''' + @path + '''
@@ -547,31 +548,59 @@ BEGIN
             FIRSTROW = 2
         );
     ';
-
     EXEC sp_executesql @BulkSqlCmd;
 
-    INSERT INTO consorcio.pago (
-        idPago,
-        fecha,
-        cuentaOrigen,
-        importe,
-        estaAsociado
-    )
-    SELECT
-        CAST(TRIM(stg_idPago) AS INT),
-        CONVERT(DATE, stg_fecha, 103),
-        CAST(TRIM(stg_cvu_cbu) AS CHAR(22)),
-        CAST(
-            REPLACE(TRIM(stg_valor), '$', '')
-            AS DECIMAL(12,3)
-        ),
-        0
-    FROM
-        #pago_staging
-    WHERE
-        stg_idPago IS NOT NULL
-        AND ISNUMERIC(REPLACE(TRIM(stg_valor), '$', '')) = 1;
+    -- 3. Crear tabla numerada para iterar
+    IF OBJECT_ID('tempdb..#pago_Num', 'U') IS NOT NULL
+        DROP TABLE #pago_Num;
 
+    SELECT 
+        ROW_NUMBER() OVER (ORDER BY stg_idPago) AS rn,
+        stg_idPago, stg_fecha, stg_cvu_cbu, stg_valor
+    INTO #pago_Num
+    FROM #pago_staging
+    WHERE stg_idPago IS NOT NULL AND ISNUMERIC(stg_idPago) = 1;
+
+    DECLARE @i INT = 1;
+    DECLARE @max INT;
+    SELECT @max = MAX(rn) FROM #pago_Num;
+
+    -- 4. Iterar y llamar a SP de inserción
+    WHILE @i <= @max
+    BEGIN
+        DECLARE @idPago INT,
+                @fecha DATE,
+                @cuentaOrigen CHAR(22),
+                @importe DECIMAL(13,3),
+                @estaAsociado BIT = 0; -- por default 0
+
+        SELECT 
+            @idPago = CAST(stg_idPago AS INT),
+            @fecha = TRY_CONVERT(DATE, stg_fecha, 103),
+            @cuentaOrigen = CAST(LTRIM(RTRIM(stg_cvu_cbu)) AS CHAR(22)),
+            @importe = CAST(REPLACE(LTRIM(RTRIM(stg_valor)),'$','') AS DECIMAL(13,3))
+        FROM #pago_Num
+        WHERE rn = @i;
+
+        BEGIN TRY
+            EXEC consorcio.sp_insertarPago
+                @idPago = @idPago,
+                @cuentaOrigen = @cuentaOrigen,
+                @importe = @importe,
+                @estaAsociado = @estaAsociado,
+                @fecha = @fecha;
+        END TRY
+        BEGIN CATCH
+            PRINT 'Error al insertar pago con ID: ' + CAST(@idPago AS VARCHAR);
+        END CATCH
+
+        SET @i = @i + 1;
+    END
+
+    -- 5. Limpiar temporales
+    DROP TABLE #pago_Num;
     DROP TABLE #pago_staging;
-END
+
+    PRINT 'Importación de pagos completada.';
+END;
 GO
