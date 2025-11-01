@@ -223,3 +223,13 @@ CREATE TABLE consorcio.gasto_extra_ordinario (
     CONSTRAINT uq_factura_extra_ord UNIQUE (nroFactura, nomEmpresa),
     CONSTRAINT fk_gastoExtraOrd_gasto FOREIGN KEY (idGasto) REFERENCES consorcio.gasto(idGasto)
 );
+
+CREATE TABLE consorcio.proveedor (
+    idProveedor INT IDENTITY(1,1) PRIMARY KEY NOT NULL,
+    idConsorcio INT NOT NULL,
+    tipoGasto VARCHAR(50) NOT NULL,
+    nomEmpresa VARCHAR(100) NULL,
+    descripcion VARCHAR(100) NULL,
+
+    CONSTRAINT fk_proveedor_consorcio FOREIGN KEY (idConsorcio) REFERENCES consorcio.consorcio(idConsorcio),
+);

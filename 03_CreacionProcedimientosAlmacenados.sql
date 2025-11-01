@@ -1,7 +1,7 @@
 /*
 ===============================================================================
 Materia:         Bases de Datos Aplicadas
-ComisiÛn:        Com 01-2900
+Comisi√≥n:        Com 01-2900
 Grupo:           G08
 Fecha de Entrega: 04/11/2025
 Integrantes:
@@ -9,7 +9,7 @@ Integrantes:
     Rodriguez Arrien, Juan Manuel 44259478
     Rodriguez, Patricio 45683229
     Ruiz, Leonel Emiliano 45537914
-Enunciado:       "03 - CreaciÛn de Procedimientos Almacenados"
+Enunciado:       "03 - Creaci√≥n de Procedimientos Almacenados"
 ===============================================================================
 */
 
@@ -101,7 +101,7 @@ BEGIN
     SELECT @max = MAX(rn) FROM #stg_Num;
 
     -------------------------------------------------------------------------
-    -- 4. Iterar y llamar al SP de inserciÛn
+    -- 4. Iterar y llamar al SP de inserci√≥n
     -------------------------------------------------------------------------
     WHILE @i <= @max
     BEGIN
@@ -218,7 +218,7 @@ BEGIN
     SELECT @max = MAX(rn) FROM #stg_Num;
 
     -------------------------------------------------------------------------
-    -- 4. Iterar y llamar a SPs de inserciÛn
+    -- 4. Iterar y llamar a SPs de inserci√≥n
     -------------------------------------------------------------------------
     WHILE @i <= @max
     BEGIN
@@ -455,16 +455,16 @@ BEGIN
         -- Limpieza de strings y casteos
         RTRIM((
             SELECT UPPER(LEFT(s.value,1)) + LOWER(SUBSTRING(s.value,2,LEN(s.value))) + ' '
-            FROM STRING_SPLIT(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(stg_nombre)), 'Ç','È'), '•','Ò'), '°','Ì'), ' ') s
+            FROM STRING_SPLIT(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(stg_nombre)), '¬Ç','√©'), '¬•','√±'), '¬°','√≠'), ' ') s
             FOR XML PATH(''), TYPE
         ).value('.', 'NVARCHAR(MAX)')) AS nombre,
         RTRIM((
             SELECT UPPER(LEFT(s.value,1)) + LOWER(SUBSTRING(s.value,2,LEN(s.value))) + ' '
-            FROM STRING_SPLIT(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(stg_apellido)), 'Ç','È'), '•','Ò'), '°','Ì'), ' ') s
+            FROM STRING_SPLIT(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(stg_apellido)), '¬Ç','√©'), '¬•','√±'), '¬°','√≠'), ' ') s
             FOR XML PATH(''), TYPE
         ).value('.', 'NVARCHAR(MAX)')) AS apellido,
         CAST(LTRIM(RTRIM(stg_dni)) AS INT) AS dni,
-        LOWER(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(stg_email)), 'Ç','È'),'•','Ò'),'°','Ì')) AS email,
+        LOWER(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(stg_email)), '¬Ç','√©'),'¬•','√±'),'¬°','√≠')) AS email,
         LTRIM(RTRIM(stg_telefono)) AS telefono,
         LTRIM(RTRIM(stg_cuentaOrigen)) AS cuentaOrigen,
         CASE WHEN stg_inquilino = '1' THEN 'inquilino' ELSE 'propietario' END AS rol
@@ -536,7 +536,7 @@ BEGIN
         END
         ELSE
         BEGIN
-            PRINT 'No se encontrÛ UF para cuentaOrigen: ' + @cuentaOrigen;
+            PRINT 'No se encontr√≥ UF para cuentaOrigen: ' + @cuentaOrigen;
         END
 
         SET @i = @i + 1;
@@ -645,5 +645,362 @@ BEGIN
     -------------------------------------------------------------------------
     DROP TABLE #pago_Num;
     DROP TABLE #pago_staging;
+END
+GO
+
+--------------------------------------------------------------------------------
+-- NUMERO: 6
+-- ARCHIVO: Servicios.Servicios.json
+-- PROCEDIMIENTO: Importar expensas y gastos
+--------------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE consorcio.SP_carga_expensas
+    @path NVARCHAR(255) -- Path del archivo JSON
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- [Declaraciones de variables - Sin cambios]
+    DECLARE 
+        @SQL NVARCHAR(MAX), @i INT, @max INT, @nomConsorcio VARCHAR(100),
+        @periodo VARCHAR(50), @idConsorcio INT, @idExpensa INT, @idGasto INT,
+        @idGastoOrdCreado INT;
+    DECLARE
+        @stg_gasto_banc NVARCHAR(50), @stg_gasto_limp NVARCHAR(50),
+        @stg_gasto_adm NVARCHAR(50), @stg_gasto_seg NVARCHAR(50),
+        @stg_gasto_gen NVARCHAR(50), @stg_gasto_pub_agua NVARCHAR(50),
+        @stg_gasto_pub_luz NVARCHAR(50);
+    DECLARE 
+        @importe DECIMAL(12,2), @nroFactura INT = 1;
+        
+    -- Variables de ayuda para la limpieza de n√∫meros
+    DECLARE 
+        @ImporteString NVARCHAR(50),
+        @ImporteLimpio NVARCHAR(50),
+        @PosPeriod INT,
+        @PosComma INT;
+
+
+    -- [Secci√≥n 1, 2, 3 - Carga de Staging - Sin cambios]
+    IF OBJECT_ID('tempdb..#expensa_staging') IS NOT NULL 
+        DROP TABLE #expensa_staging;
+    CREATE TABLE #expensa_staging (
+        stg_nom_consorcio VARCHAR(50), stg_periodo VARCHAR(50),
+        stg_gasto_banc NVARCHAR(50), stg_gasto_limp NVARCHAR(50),
+        stg_gasto_adm NVARCHAR(50), stg_gasto_seg NVARCHAR(50),
+        stg_gasto_gen NVARCHAR(50), stg_gasto_pub_agua NVARCHAR(50),
+        stg_gasto_pub_luz NVARCHAR(50)
+    );
+    SET @SQL = N'
+    INSERT INTO #expensa_staging(
+        stg_nom_consorcio, stg_periodo, stg_gasto_banc, stg_gasto_limp, stg_gasto_adm, 
+        stg_gasto_seg, stg_gasto_gen, stg_gasto_pub_agua, stg_gasto_pub_luz
+    )
+    SELECT 
+        stg_nom_consorcio, stg_periodo, stg_gasto_banc, stg_gasto_limp, stg_gasto_adm, 
+        stg_gasto_seg, stg_gasto_gen, stg_gasto_pub_agua, stg_gasto_pub_luz
+    FROM OPENROWSET (BULK ''' + @path + N''', SINGLE_CLOB) AS j
+    CROSS APPLY OPENJSON(BulkColumn)  
+    WITH (
+        stg_nom_consorcio VARCHAR(50) ''$."Nombre del consorcio"'',
+        stg_periodo VARCHAR(50) ''$.Mes'',
+        stg_gasto_banc NVARCHAR(50) ''$.BANCARIOS'',
+        stg_gasto_limp NVARCHAR(50) ''$.LIMPIEZA'',
+        stg_gasto_adm NVARCHAR(50) ''$.ADMINISTRACION'',
+        stg_gasto_seg NVARCHAR(50) ''$.SEGUROS'',
+        stg_gasto_gen NVARCHAR(50) ''$."GASTOS GENERALES"'',
+        stg_gasto_pub_agua NVARCHAR(50) ''$."SERVICIOS PUBLICOS-Agua"'',
+        stg_gasto_pub_luz NVARCHAR(50) ''$."SERVICIOS PUBLICOS-Luz"''
+    );';
+    EXEC sp_executesql @SQL;
+    IF OBJECT_ID('tempdb..#cte_expensa') IS NOT NULL DROP TABLE #cte_expensa;
+    SELECT 
+        s.stg_nom_consorcio, s.stg_periodo, 
+        ROW_NUMBER() OVER (ORDER BY s.stg_nom_consorcio) AS rn
+    INTO #cte_expensa
+    FROM #expensa_staging AS s;
+    SELECT @max = MAX(rn) FROM #cte_expensa;
+    SET @i = 1;
+
+    -- [Inicio del Bucle WHILE]
+    WHILE @i <= @max
+    BEGIN
+        -- 5.1 Obtener datos de iteraci√≥n y staging
+        SELECT 
+            @nomConsorcio = t.stg_nom_consorcio, @periodo = t.stg_periodo,
+            @stg_gasto_banc = s.stg_gasto_banc, @stg_gasto_limp = s.stg_gasto_limp,
+            @stg_gasto_adm = s.stg_gasto_adm, @stg_gasto_seg = s.stg_gasto_seg,
+            @stg_gasto_gen = s.stg_gasto_gen, @stg_gasto_pub_agua = s.stg_gasto_pub_agua,
+            @stg_gasto_pub_luz = s.stg_gasto_pub_luz
+        FROM #cte_expensa AS t
+        INNER JOIN #expensa_staging AS s 
+            ON t.stg_nom_consorcio = s.stg_nom_consorcio AND t.stg_periodo = s.stg_periodo
+        WHERE rn = @i;
+
+        PRINT '----------------------------------------------------';
+        PRINT 'INICIANDO Iteraci√≥n ' + CAST(@i AS VARCHAR) + ' para Consorcio: ' + ISNULL(@nomConsorcio, 'NULL');
+        
+        -- Obtener idConsorcio
+        SELECT @idConsorcio = c.idConsorcio
+        FROM consorcio.consorcio AS c
+        WHERE c.nombre = @nomConsorcio;
+        
+        PRINT '-> idConsorcio encontrado: ' + ISNULL(CAST(@idConsorcio AS VARCHAR), 'NO ENCONTRADO');
+
+        IF @idConsorcio IS NOT NULL
+        BEGIN
+            -- 5.2 Insertar Expensa
+            SET @idExpensa = NULL;
+            EXEC consorcio.sp_insertarExpensa 
+                @idConsorcio = @idConsorcio, @periodo = @periodo, @anio = 2025,
+                @idExpensaCreada = @idExpensa OUTPUT; 
+            
+            -- 5.3 Insertar Gasto (Padre)
+            IF @idExpensa IS NOT NULL
+            BEGIN
+                SET @idGasto = NULL;
+                EXEC consorcio.sp_insertarGasto 
+                    @idExpensa = @idExpensa, @subTotalOrdinarios = 0, @subTotalExtraOrd = 0, 
+                    @idGastoCreado = @idGasto OUTPUT; 
+
+                -- 5.4 Insertar Gastos Ordinarios (Detalle)
+                IF @idGasto IS NOT NULL
+                BEGIN
+                    PRINT '... Preparando inserci√≥n de gastos ordinarios ...';
+                    
+                    -- A. Gasto Bancario
+                    SET @ImporteString = ISNULL(@stg_gasto_banc, '0');
+                    SET @PosPeriod = CHARINDEX('.', REVERSE(@ImporteString));
+                    SET @PosComma = CHARINDEX(',', REVERSE(@ImporteString));
+                    IF @PosPeriod = 0 SET @PosPeriod = 999;
+                    IF @PosComma = 0 SET @PosComma = 999;
+                    IF (@PosPeriod < @PosComma)
+                        SET @ImporteLimpio = REPLACE(@ImporteString, ',', ''); -- Formato US
+                    ELSE
+                        SET @ImporteLimpio = REPLACE(REPLACE(@ImporteString, '.', ''), ',', '.'); -- Formato ES
+                    SET @importe = TRY_CAST(@ImporteLimpio AS DECIMAL(12,2));
+                    
+                    PRINT '  A. Gasto Banc: Staging=' + ISNULL(@stg_gasto_banc, 'NULL') + ', Limpio=' + ISNULL(@ImporteLimpio, 'NULL') + ', Cast=' + ISNULL(CAST(@importe AS VARCHAR), 'NULL');
+                    IF @importe IS NOT NULL AND @importe > 0
+                    BEGIN
+                        PRINT '     -> Insertando Bancario...';
+                        EXEC consorcio.sp_insertarGastoOrdinario @idGasto, 'mantenimiento', '', '-', @nroFactura, @importe, @idGastoOrdCreado OUTPUT;
+                    END
+                    ELSE PRINT '     -> OMITIDO (Importe es NULL o 0)';
+                    SET @nroFactura += 1;
+
+                    -- B. Gasto Limpieza
+                    SET @ImporteString = ISNULL(@stg_gasto_limp, '0');
+                    SET @PosPeriod = CHARINDEX('.', REVERSE(@ImporteString));
+                    SET @PosComma = CHARINDEX(',', REVERSE(@ImporteString));
+                    IF @PosPeriod = 0 SET @PosPeriod = 999;
+                    IF @PosComma = 0 SET @PosComma = 999;
+                    IF (@PosPeriod < @PosComma)
+                        SET @ImporteLimpio = REPLACE(@ImporteString, ',', '');
+                    ELSE
+                        SET @ImporteLimpio = REPLACE(REPLACE(@ImporteString, '.', ''), ',', '.');
+                    SET @importe = TRY_CAST(@ImporteLimpio AS DECIMAL(12,2));
+
+                    PRINT '  B. Gasto Limp: Staging=' + ISNULL(@stg_gasto_limp, 'NULL') + ', Limpio=' + ISNULL(@ImporteLimpio, 'NULL') + ', Cast=' + ISNULL(CAST(@importe AS VARCHAR), 'NULL');
+                    IF @importe IS NOT NULL AND @importe > 0
+                    BEGIN
+                        PRINT '     -> Insertando Limpieza...';
+                        EXEC consorcio.sp_insertarGastoOrdinario @idGasto, 'limpieza', '', '-', @nroFactura, @importe, @idGastoOrdCreado OUTPUT;
+                    END
+                    ELSE PRINT '     -> OMITIDO (Importe es NULL o 0)';
+                    SET @nroFactura += 1;
+
+                    -- C. Gasto Administraci√≥n
+                    SET @ImporteString = ISNULL(@stg_gasto_adm, '0');
+                    SET @PosPeriod = CHARINDEX('.', REVERSE(@ImporteString));
+                    SET @PosComma = CHARINDEX(',', REVERSE(@ImporteString));
+                    IF @PosPeriod = 0 SET @PosPeriod = 999;
+                    IF @PosComma = 0 SET @PosComma = 999;
+                    IF (@PosPeriod < @PosComma)
+                        SET @ImporteLimpio = REPLACE(@ImporteString, ',', '');
+                    ELSE
+                        SET @ImporteLimpio = REPLACE(REPLACE(@ImporteString, '.', ''), ',', '.');
+                    SET @importe = TRY_CAST(@ImporteLimpio AS DECIMAL(12,2));
+
+                    PRINT '  C. Gasto Adm: Staging=' + ISNULL(@stg_gasto_adm, 'NULL') + ', Limpio=' + ISNULL(@ImporteLimpio, 'NULL') + ', Cast=' + ISNULL(CAST(@importe AS VARCHAR), 'NULL');
+                    IF @importe IS NOT NULL AND @importe > 0
+                    BEGIN
+                        PRINT '     -> Insertando Administracion...';
+                        EXEC consorcio.sp_insertarGastoOrdinario @idGasto, 'administracion', '', '-', @nroFactura, @importe, @idGastoOrdCreado OUTPUT;
+                    END
+                    ELSE PRINT '     -> OMITIDO (Importe es NULL o 0)';
+                    SET @nroFactura += 1;
+
+                    -- D. Gasto Seguros
+                    SET @ImporteString = ISNULL(@stg_gasto_seg, '0');
+                    SET @PosPeriod = CHARINDEX('.', REVERSE(@ImporteString));
+                    SET @PosComma = CHARINDEX(',', REVERSE(@ImporteString));
+                    IF @PosPeriod = 0 SET @PosPeriod = 999;
+                    IF @PosComma = 0 SET @PosComma = 999;
+                    IF (@PosPeriod < @PosComma)
+                        SET @ImporteLimpio = REPLACE(@ImporteString, ',', '');
+                    ELSE
+                        SET @ImporteLimpio = REPLACE(REPLACE(@ImporteString, '.', ''), ',', '.');
+                    SET @importe = TRY_CAST(@ImporteLimpio AS DECIMAL(12,2));
+
+                    PRINT '  D. Gasto Seg: Staging=' + ISNULL(@stg_gasto_seg, 'NULL') + ', Limpio=' + ISNULL(@ImporteLimpio, 'NULL') + ', Cast=' + ISNULL(CAST(@importe AS VARCHAR), 'NULL');
+                    IF @importe IS NOT NULL AND @importe > 0
+                    BEGIN
+                        PRINT '     -> Insertando Seguros...';
+                        EXEC consorcio.sp_insertarGastoOrdinario @idGasto, 'seguros', '', '-', @nroFactura, @importe, @idGastoOrdCreado OUTPUT;
+                    END
+                    ELSE PRINT '     -> OMITIDO (Importe es NULL o 0)';
+                    SET @nroFactura += 1;
+
+                    -- E. Gasto Generales
+                    SET @ImporteString = ISNULL(@stg_gasto_gen, '0');
+                    SET @PosPeriod = CHARINDEX('.', REVERSE(@ImporteString));
+                    SET @PosComma = CHARINDEX(',', REVERSE(@ImporteString));
+                    IF @PosPeriod = 0 SET @PosPeriod = 999;
+                    IF @PosComma = 0 SET @PosComma = 999;
+                    IF (@PosPeriod < @PosComma)
+                        SET @ImporteLimpio = REPLACE(@ImporteString, ',', '');
+                    ELSE
+                        SET @ImporteLimpio = REPLACE(REPLACE(@ImporteString, '.', ''), ',', '.');
+                    SET @importe = TRY_CAST(@ImporteLimpio AS DECIMAL(12,2));
+
+                    PRINT '  E. Gasto Gen: Staging=' + ISNULL(@stg_gasto_gen, 'NULL') + ', Limpio=' + ISNULL(@ImporteLimpio, 'NULL') + ', Cast=' + ISNULL(CAST(@importe AS VARCHAR), 'NULL');
+                    IF @importe IS NOT NULL AND @importe > 0
+                    BEGIN
+                        PRINT '     -> Insertando Generales...';
+                        EXEC consorcio.sp_insertarGastoOrdinario @idGasto, 'generales', '', '-', @nroFactura, @importe, @idGastoOrdCreado OUTPUT;
+                    END
+                    ELSE PRINT '     -> OMITIDO (Importe es NULL o 0)';
+                    SET @nroFactura += 1;
+
+                    -- F. Servicios P√∫blicos - Agua
+                    SET @ImporteString = ISNULL(@stg_gasto_pub_agua, '0');
+                    SET @PosPeriod = CHARINDEX('.', REVERSE(@ImporteString));
+                    SET @PosComma = CHARINDEX(',', REVERSE(@ImporteString));
+                    IF @PosPeriod = 0 SET @PosPeriod = 999;
+                    IF @PosComma = 0 SET @PosComma = 999;
+                    IF (@PosPeriod < @PosComma)
+                        SET @ImporteLimpio = REPLACE(@ImporteString, ',', '');
+                    ELSE
+                        SET @ImporteLimpio = REPLACE(REPLACE(@ImporteString, '.', ''), ',', '.');
+                    SET @importe = TRY_CAST(@ImporteLimpio AS DECIMAL(12,2));
+
+                    PRINT '  F. Gasto Agua: Staging=' + ISNULL(@stg_gasto_pub_agua, 'NULL') + ', Limpio=' + ISNULL(@ImporteLimpio, 'NULL') + ', Cast=' + ISNULL(CAST(@importe AS VARCHAR), 'NULL');
+                    IF @importe IS NOT NULL AND @importe > 0
+                    BEGIN
+                        PRINT '     -> Insertando Agua...';
+                        EXEC consorcio.sp_insertarGastoOrdinario @idGasto, 'servicios publicos', 'agua', '-', @nroFactura, @importe, @idGastoOrdCreado OUTPUT;
+                    END
+                    ELSE PRINT '     -> OMITIDO (Importe es NULL o 0)';
+                    SET @nroFactura += 1;
+
+                    -- G. Servicios P√∫blicos - Luz
+                    SET @ImporteString = ISNULL(@stg_gasto_pub_luz, '0');
+                    SET @PosPeriod = CHARINDEX('.', REVERSE(@ImporteString));
+                    SET @PosComma = CHARINDEX(',', REVERSE(@ImporteString));
+                    IF @PosPeriod = 0 SET @PosPeriod = 999;
+                    IF @PosComma = 0 SET @PosComma = 999;
+                    IF (@PosPeriod < @PosComma)
+                        SET @ImporteLimpio = REPLACE(@ImporteString, ',', '');
+                    ELSE
+                        SET @ImporteLimpio = REPLACE(REPLACE(@ImporteString, '.', ''), ',', '.');
+                    SET @importe = TRY_CAST(@ImporteLimpio AS DECIMAL(12,2));
+
+                    PRINT '  G. Gasto Luz: Staging=' + ISNULL(@stg_gasto_pub_luz, 'NULL') + ', Limpio=' + ISNULL(@ImporteLimpio, 'NULL') + ', Cast=' + ISNULL(CAST(@importe AS VARCHAR), 'NULL');
+                    IF @importe IS NOT NULL AND @importe > 0
+                    BEGIN
+                        PRINT '     -> Insertando Luz...';
+                        EXEC consorcio.sp_insertarGastoOrdinario @idGasto, 'servicios publicos', 'luz', '-', @nroFactura, @importe, @idGastoOrdCreado OUTPUT;
+                    END
+                    ELSE PRINT '     -> OMITIDO (Importe es NULL o 0)';
+                    SET @nroFactura += 1;
+
+                END
+            END
+        END
+        ELSE
+        BEGIN
+            PRINT 'ERROR: No se encontr√≥ el consorcio: ' + ISNULL(@nomConsorcio, 'NOMBRE NULO');
+        END
+
+        PRINT 'FIN Iteraci√≥n ' + CAST(@i AS VARCHAR);
+        SET @i += 1;
+    END; -- Fin del Bucle WHILE
+
+
+    IF OBJECT_ID('tempdb..#cte_expensa') IS NOT NULL DROP TABLE #cte_expensa;
+    IF OBJECT_ID('tempdb..#expensa_staging') IS NOT NULL DROP TABLE #expensa_staging;
+
+END
+GO
+
+--------------------------------------------------------------------------------
+-- NUMERO: 7
+-- ARCHIVO: datos varios.xlsx
+-- PROCEDIMIENTO: Importar Proveedores
+--------------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE consorcio.SP_importar_proveedores_excel
+    @path NVARCHAR(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF OBJECT_ID('consorcio.proveedor_temp', 'U') IS NOT NULL
+        DROP TABLE consorcio.proveedor_temp;
+
+    CREATE TABLE consorcio.proveedor_temp (
+        id_temp INT IDENTITY(1,1) PRIMARY KEY,
+        tipoGasto VARCHAR(100) NOT NULL,
+        nomEmpresa VARCHAR(100) NULL,
+        descripcion VARCHAR(100) NULL,
+        nombreConsorcio VARCHAR(100) NOT NULL
+    );
+
+    -------------------------------------------------------------------------
+    -- 2. Cargar datos del Excel (rango espec√É¬≠fico)
+    -------------------------------------------------------------------------
+    DECLARE @sql NVARCHAR(MAX);
+
+    SET @sql = N'
+    INSERT INTO consorcio.proveedor_temp (tipoGasto, nomEmpresa, descripcion, nombreConsorcio)
+    SELECT
+        LTRIM(RTRIM(CAST(t.F1 AS VARCHAR(100)))) AS tipoGasto,
+        LTRIM(RTRIM(CAST(t.F2 AS VARCHAR(100)))) AS nomEmpresa,
+        LTRIM(RTRIM(CAST(t.F3 AS VARCHAR(255)))) AS descripcion,
+        LTRIM(RTRIM(CAST(t.F4 AS VARCHAR(100)))) AS nombreConsorcio
+    FROM OPENROWSET(
+        ''Microsoft.ACE.OLEDB.12.0'',
+        ''Excel 12.0;Database=' + @path + ';HDR=NO;IMEX=1;'',
+        ''SELECT * FROM [Proveedores$B3:E30]''
+    ) AS t
+    WHERE
+        t.F1 IS NOT NULL
+        AND t.F4 IS NOT NULL;';
+
+    EXEC sp_executesql @sql;
+
+    -------------------------------------------------------------------------
+    -- 3. Insertar en la tabla definitiva (relacionando con consorcio)
+    -------------------------------------------------------------------------
+    INSERT INTO consorcio.proveedor (
+        idConsorcio,
+        tipoGasto,
+        nomEmpresa,
+        descripcion
+    )
+    SELECT
+        c.idConsorcio,
+        t.tipoGasto,
+        t.nomEmpresa,
+        t.descripcion
+    FROM consorcio.proveedor_temp AS t
+    INNER JOIN consorcio.consorcio AS c
+        ON LTRIM(RTRIM(t.nombreConsorcio)) = c.nombre;
+
+    -------------------------------------------------------------------------
+    -- 4. Limpiar tabla temporal
+    -------------------------------------------------------------------------
+    DROP TABLE consorcio.proveedor_temp;
+END;
+GO
 END;
 GO
