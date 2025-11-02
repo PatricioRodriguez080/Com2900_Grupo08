@@ -101,7 +101,6 @@ EXEC consorcio.sp_procesa_actualizacion_gastos;
 
 SELECT * FROM consorcio.gasto_ordinario;
 
-
 --------------------------------------------------------------------------------
 -- NUMERO: 9
 -- ARCHIVO: -
@@ -110,3 +109,12 @@ SELECT * FROM consorcio.gasto_ordinario;
 EXEC consorcio.SP_cargar_estado_financiero;
 
 SELECT * FROM consorcio.estado_financiero;
+
+--------------------------------------------------------------------------------
+-- NUMERO: 10
+-- ARCHIVO: -
+-- PROCEDIMIENTO: Modificacion de tablas para cifrado de datos sensibles
+--------------------------------------------------------------------------------
+EXEC consorcio.SP_MigrarEsquemaACifradoReversible_Seguro 
+    @FraseClave = 'Migradoantihackers';
+GO
