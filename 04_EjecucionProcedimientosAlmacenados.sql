@@ -107,3 +107,6 @@ SELECT * FROM consorcio.gasto_ordinario;
 -- ARCHIVO: -
 -- PROCEDIMIENTO: Insercion de datos a la tabla estado_financiero
 --------------------------------------------------------------------------------
+EXEC consorcio.SP_cargar_estado_financiero;
+
+SELECT * FROM consorcio.estado_financiero;
