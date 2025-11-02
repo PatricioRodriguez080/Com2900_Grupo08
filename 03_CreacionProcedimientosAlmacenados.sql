@@ -982,9 +982,6 @@ BEGIN
     BEGIN TRY
         BEGIN TRANSACTION;
 
-        -------------------------------------------------------------------------
-        -- 1. Crear tabla temporal de staging
-        -------------------------------------------------------------------------
         IF OBJECT_ID('tempdb..#stg_gastosProcesados') IS NOT NULL
             DROP TABLE #stg_gastosProcesados;
 
@@ -1292,4 +1289,133 @@ BEGIN
         RAISERROR('Error en SP_cargar_estado_financiero: %s', 16, 1, @ErrorMessage);
     END CATCH;
 END;
+GO
+
+USE Com2900G08;
+GO
+
+USE Com2900G08;
+GO
+
+--------------------------------------------------------------------------------
+-- PROCEDIMIENTO: SP_MigrarEsquemaACifradoReversible_Seguro
+-- DESCRIPCIÓN: Migra de forma segura los datos existentes a VARBINARY(256)
+--              aplicando ENCRYPTBYPASSPHRASE. Usa EXECUTE DYNAMIC para evitar 
+--              el error de columna no encontrada después de ALTER TABLE.
+--------------------------------------------------------------------------------
+USE Com2900G08;
+GO
+
+--------------------------------------------------------------------------------
+-- PROCEDIMIENTO: SP_MigrarEsquemaACifradoReversible_Seguro
+-- DESCRIPCIÓN: Migra de forma segura los datos existentes a VARBINARY(256)
+--              (CORREGIDO: Elimina dependencias faltantes en tiempo de ejecución)
+--------------------------------------------------------------------------------
+USE Com2900G08;
+GO
+
+--------------------------------------------------------------------------------
+-- PROCEDIMIENTO: SP_MigrarEsquemaACifradoReversible_Seguro
+-- DESCRIPCIÓN: Migra de forma segura los datos existentes a VARBINARY(256)
+--              (CORREGIDO: Resuelve la ambigüedad 'name' en la búsqueda de constraints)
+--------------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE consorcio.SP_MigrarEsquemaACifradoReversible_Seguro
+    @FraseClave NVARCHAR(128)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    DECLARE @SQL NVARCHAR(MAX);
+    DECLARE @ConstraintName NVARCHAR(128);
+
+    ALTER TABLE consorcio.persona DROP CONSTRAINT IF EXISTS chk_persona_cuentaOrigen;
+    ALTER TABLE consorcio.unidad_funcional DROP CONSTRAINT IF EXISTS chk_unidadFuncional_cuentaOrigen;
+    ALTER TABLE consorcio.pago DROP CONSTRAINT IF EXISTS chk_pago_cuentaOrigen;
+
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'dni_hash_unicidad' AND Object_ID = Object_ID(N'consorcio.persona'))
+        ALTER TABLE consorcio.persona ADD dni_hash_unicidad VARBINARY(64) NULL;
+        
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'dni_temp' AND Object_ID = Object_ID(N'consorcio.persona'))
+        ALTER TABLE consorcio.persona ADD dni_temp VARBINARY(256) NULL;
+        
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'email_temp' AND Object_ID = Object_ID(N'consorcio.persona'))
+        ALTER TABLE consorcio.persona ADD email_temp VARBINARY(256) NULL;
+        
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'telefono_temp' AND Object_ID = Object_ID(N'consorcio.persona'))
+        ALTER TABLE consorcio.persona ADD telefono_temp VARBINARY(256) NULL;
+        
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'cuentaOrigen_temp' AND Object_ID = Object_ID(N'consorcio.persona'))
+        ALTER TABLE consorcio.persona ADD cuentaOrigen_temp VARBINARY(256) NULL;
+
+    SET @SQL = N'
+    UPDATE consorcio.persona
+    SET 
+        dni_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(dni AS VARCHAR), 1, CONVERT(VARBINARY, idPersona)),
+        email_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(email AS VARCHAR(100)), 1, CONVERT(VARBINARY, idPersona)),
+        telefono_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(telefono AS VARCHAR(20)), 1, CONVERT(VARBINARY, idPersona)),
+        cuentaOrigen_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(cuentaOrigen AS CHAR(22)), 1, CONVERT(VARBINARY, idPersona)),
+        dni_hash_unicidad = HASHBYTES(''SHA2_256'', CAST(dni AS VARCHAR));
+    ';
+    EXEC sp_executesql @SQL, N'@FraseClaveParam NVARCHAR(128)', @FraseClaveParam = @FraseClave;
+
+    SELECT @ConstraintName = NULL; -- Reiniciar
+    
+    SELECT TOP 1 @ConstraintName = kc.name 
+    FROM sys.key_constraints kc
+    INNER JOIN sys.index_columns ic ON kc.parent_object_id = ic.object_id AND kc.unique_index_id = ic.index_id
+    INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+    WHERE kc.parent_object_id = OBJECT_ID('consorcio.persona') 
+      AND kc.type IN ('UQ', 'PK') 
+      AND c.name = 'dni';
+
+    IF @ConstraintName IS NOT NULL
+    BEGIN
+        SET @SQL = N'ALTER TABLE consorcio.persona DROP CONSTRAINT ' + QUOTENAME(@ConstraintName);
+        EXEC sp_executesql @SQL;
+        PRINT 'Restricción dependiente (' + @ConstraintName + ') eliminada.';
+    END
+    
+    ALTER TABLE consorcio.persona DROP COLUMN dni;
+    ALTER TABLE consorcio.persona DROP COLUMN email;
+    ALTER TABLE consorcio.persona DROP COLUMN telefono;
+    ALTER TABLE consorcio.persona DROP COLUMN cuentaOrigen;
+
+    EXEC sp_rename 'consorcio.persona.dni_temp', 'dni', 'COLUMN';
+    EXEC sp_rename 'consorcio.persona.email_temp', 'email', 'COLUMN';
+    EXEC sp_rename 'consorcio.persona.telefono_temp', 'telefono', 'COLUMN';
+    EXEC sp_rename 'consorcio.persona.cuentaOrigen_temp', 'cuentaOrigen', 'COLUMN';
+
+    ALTER TABLE consorcio.persona ALTER COLUMN dni VARBINARY(256) NOT NULL;
+    ALTER TABLE consorcio.persona ALTER COLUMN cuentaOrigen VARBINARY(256) NOT NULL;
+    
+    ALTER TABLE consorcio.persona ADD CONSTRAINT UQ_persona_dni_hash UNIQUE (dni_hash_unicidad);
+
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'cuentaOrigen_temp' AND Object_ID = Object_ID(N'consorcio.unidad_funcional'))
+        ALTER TABLE consorcio.unidad_funcional ADD cuentaOrigen_temp VARBINARY(256) NULL;
+    
+    SET @SQL = N'
+    UPDATE consorcio.unidad_funcional
+    SET cuentaOrigen_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(cuentaOrigen AS CHAR(22)), 1, CONVERT(VARBINARY, idUnidadFuncional));
+    ';
+    EXEC sp_executesql @SQL, N'@FraseClaveParam NVARCHAR(128)', @FraseClaveParam = @FraseClave;
+
+    ALTER TABLE consorcio.unidad_funcional DROP COLUMN cuentaOrigen;
+    EXEC sp_rename 'consorcio.unidad_funcional.cuentaOrigen_temp', 'cuentaOrigen', 'COLUMN';
+    ALTER TABLE consorcio.unidad_funcional ALTER COLUMN cuentaOrigen VARBINARY(256) NOT NULL;
+
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'cuentaOrigen_temp' AND Object_ID = Object_ID(N'consorcio.pago'))
+        ALTER TABLE consorcio.pago ADD cuentaOrigen_temp VARBINARY(256) NULL;
+    
+    SET @SQL = N'
+    UPDATE consorcio.pago
+    SET cuentaOrigen_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(cuentaOrigen AS CHAR(22)), 1, CONVERT(VARBINARY, idPago));
+    ';
+    EXEC sp_executesql @SQL, N'@FraseClaveParam NVARCHAR(128)', @FraseClaveParam = @FraseClave;
+
+    ALTER TABLE consorcio.pago DROP COLUMN cuentaOrigen;
+    EXEC sp_rename 'consorcio.pago.cuentaOrigen_temp', 'cuentaOrigen', 'COLUMN';
+    ALTER TABLE consorcio.pago ALTER COLUMN cuentaOrigen VARBINARY(256) NOT NULL;
+
+    PRINT 'Migración de esquema a cifrado reversible COMPLETADA. Los datos existentes fueron cifrados con éxito.';
+END
 GO
