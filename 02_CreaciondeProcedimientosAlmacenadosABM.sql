@@ -812,7 +812,7 @@ BEGIN
     END
 
     -- validamos q el consorcio no tenga UF linkeadas activas
-    IF EXISTS (SELECT 1 FROM consorcio.UnidadFuncional 
+    IF EXISTS (SELECT 1 FROM consorcio.unidad_funcional 
                WHERE idConsorcio = @idConsorcio 
                AND fechaBaja IS NULL)
     BEGIN

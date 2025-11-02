@@ -9,7 +9,7 @@ Integrantes:
     - Rodriguez Arrien, Juan Manuel (44259478)
     - Rodriguez, Patricio (45683229)
     - Ruiz, Leonel Emiliano (45537914)
-Enunciado:        "04 - Ejecución de Procedimientos Almacenados"
+Enunciado:        "05 - Ejecución de Procedimientos Almacenados"
 ===============================================================================
 */
 
