@@ -1,7 +1,7 @@
 /*
 ===============================================================================
 Materia:          Bases de Datos Aplicadas
-ComisiÛn:         01-2900
+Comisi√≥n:         01-2900
 Grupo:            G08
 Fecha de Entrega: 04/11/2025
 Integrantes:
@@ -17,7 +17,7 @@ USE Com2900G08;
 GO
 
 ----------------------------------------------------
--- A. CREACI”N DE ROLES DE BASE DE DATOS
+-- A. CREACI√ìN DE ROLES DE BASE DE DATOS
 ----------------------------------------------------
 -- Se utilizan corchetes [] debido a que algunos nombres contienen espacios.
 CREATE ROLE [Administrativo general];
@@ -26,25 +26,25 @@ CREATE ROLE [Administrativo operativo];
 CREATE ROLE [Sistemas];
 GO
 
--- 1. Rol: Administrativo general (ActualizaciÛn UF y Reportes) --
+-- 1. Rol: Administrativo general (Actualizaci√≥n UF y Reportes) --
 GRANT UPDATE ON consorcio.unidad_funcional TO [Administrativo general];
 GRANT SELECT ON consorcio.expensa TO [Administrativo general];
 GRANT SELECT ON consorcio.detalle_expensa TO [Administrativo general];
 GO
 
--- 2. Rol: Administrativo Bancario (ImportaciÛn Bancaria y Reportes) --
-GRANT INSERT ON consorcio.pago TO [Administrativo Bancario]; -- ImportaciÛn de informaciÛn bancaria
+-- 2. Rol: Administrativo Bancario (Importaci√≥n Bancaria y Reportes) --
+GRANT INSERT ON consorcio.pago TO [Administrativo Bancario]; -- Importaci√≥n de informaci√≥n bancaria
 GRANT SELECT ON consorcio.expensa TO [Administrativo Bancario];
 GRANT SELECT ON consorcio.detalle_expensa TO [Administrativo Bancario];
 GO
 
--- 3. Rol: Administrativo operativo (ActualizaciÛn UF y Reportes) --
+-- 3. Rol: Administrativo operativo (Actualizaci√≥n UF y Reportes) --
 GRANT UPDATE ON consorcio.unidad_funcional TO [Administrativo operativo];
 GRANT SELECT ON consorcio.expensa TO [Administrativo operativo];
 GRANT SELECT ON consorcio.detalle_expensa TO [Administrativo operativo];
 GO
 
--- Rol: Sistemas (Solo GeneraciÛn de reportes) --
+-- Rol: Sistemas (Solo Generaci√≥n de reportes) --
 GRANT SELECT ON consorcio.expensa TO [Sistemas];
 GRANT SELECT ON consorcio.detalle_expensa TO [Sistemas];
 GO
@@ -52,72 +52,72 @@ GO
 USE master;
 GO
 
---- CreaciÛn usuarios Administrativo General ---
+--- Creaci√≥n usuarios Administrativo General ---
 -- LUCAS
-CREATE LOGIN login_lucas WITH PASSWORD = '4Ò#kZp1@G7X!', CHECK_POLICY = ON;
+CREATE LOGIN login_lucas WITH PASSWORD = '4√±#kZp1@G7X!', CHECK_POLICY = ON;
 CREATE USER user_lucas FOR LOGIN login_lucas;
 ALTER ROLE [Administrativo general] ADD MEMBER user_lucas;
 GO
 
 -- JUAN
-CREATE LOGIN login_juan WITH PASSWORD = '9$ÒHw2pY!tJ7', CHECK_POLICY = ON;
+CREATE LOGIN login_juan WITH PASSWORD = '9$√±Hw2pY!tJ7', CHECK_POLICY = ON;
 CREATE USER user_juan FOR LOGIN login_juan;
 ALTER ROLE [Administrativo general] ADD MEMBER user_juan;
 GO
 
 -- PEDRO
-CREATE LOGIN login_pedro WITH PASSWORD = 'B!xÒM8@cQ02$', CHECK_POLICY = ON;
+CREATE LOGIN login_pedro WITH PASSWORD = 'B!x√±M8@cQ02$', CHECK_POLICY = ON;
 CREATE USER user_pedro FOR LOGIN login_pedro;
 ALTER ROLE [Administrativo general] ADD MEMBER user_pedro;
 GO
 
---- CreaciÛn usuarios Administrativo Bancario ---
+--- Creaci√≥n usuarios Administrativo Bancario ---
 -- AXEL
-CREATE LOGIN login_axel WITH PASSWORD = 'S8q#ÒLz!7E3W', CHECK_POLICY = ON;
+CREATE LOGIN login_axel WITH PASSWORD = 'S8q#√±Lz!7E3W', CHECK_POLICY = ON;
 CREATE USER user_axel FOR LOGIN login_axel;
 ALTER ROLE [Administrativo Bancario] ADD MEMBER user_axel;
 GO
 
 -- MARIA
-CREATE LOGIN login_maria WITH PASSWORD = 'A7Ò$Rk@49Qx!', CHECK_POLICY = ON;
+CREATE LOGIN login_maria WITH PASSWORD = 'A7√±$Rk@49Qx!', CHECK_POLICY = ON;
 CREATE USER user_maria FOR LOGIN login_maria;
 ALTER ROLE [Administrativo Bancario] ADD MEMBER user_maria;
 GO
 
 -- MARTINA
-CREATE LOGIN login_martina WITH PASSWORD = '5M!ÒPz@1Jk4D', CHECK_POLICY = ON;
+CREATE LOGIN login_martina WITH PASSWORD = '5M!√±Pz@1Jk4D', CHECK_POLICY = ON;
 CREATE USER user_martina FOR LOGIN login_martina;
 ALTER ROLE [Administrativo Bancario] ADD MEMBER user_martina;
 GO
 
---- CreaciÛn usuarios Administrativo Operativo ---
+--- Creaci√≥n usuarios Administrativo Operativo ---
 -- CAMILA
-CREATE LOGIN login_camila WITH PASSWORD = 'Ò2X!g9$T@bL4', CHECK_POLICY = ON;
+CREATE LOGIN login_camila WITH PASSWORD = '√±2X!g9$T@bL4', CHECK_POLICY = ON;
 CREATE USER user_camila FOR LOGIN login_camila;
 ALTER ROLE [Administrativo operativo] ADD MEMBER user_camila;
 GO
 
 -- PILAR
-CREATE LOGIN login_pilar WITH PASSWORD = 'QÒ7@v3!T#cZ1', CHECK_POLICY = ON;
+CREATE LOGIN login_pilar WITH PASSWORD = 'Q√±7@v3!T#cZ1', CHECK_POLICY = ON;
 CREATE USER user_pilar FOR LOGIN login_pilar;
 ALTER ROLE [Administrativo operativo] ADD MEMBER user_pilar;
 GO
 
 -- SOFIA
-CREATE LOGIN login_sofia WITH PASSWORD = '1P!ÒY5@G8jH$s', CHECK_POLICY = ON;
+CREATE LOGIN login_sofia WITH PASSWORD = '1P!√±Y5@G8jH$s', CHECK_POLICY = ON;
 CREATE USER user_sofia FOR LOGIN login_sofia;
 ALTER ROLE [Administrativo operativo] ADD MEMBER user_sofia;
 GO
 
---- CreaciÛn usuarios Sistemas ---
+--- Creaci√≥n usuarios Sistemas ---
 -- ALAN
-CREATE LOGIN login_alan_sys WITH PASSWORD = 'ZÒ3@Hk!8Tq9$', CHECK_POLICY = ON;
+CREATE LOGIN login_alan_sys WITH PASSWORD = 'Z√±3@Hk!8Tq9$', CHECK_POLICY = ON;
 CREATE USER user_alan_sys FOR LOGIN login_alan_sys;
 ALTER ROLE [Sistemas] ADD MEMBER user_alan_sys;
 GO
 
 -- BRUNO
-CREATE LOGIN login_bruno_sys WITH PASSWORD = 'ÒG7$Qw!5Xp2#', CHECK_POLICY = ON;
+CREATE LOGIN login_bruno_sys WITH PASSWORD = '√±G7$Qw!5Xp2#', CHECK_POLICY = ON;
 CREATE USER user_bruno_sys FOR LOGIN login_bruno_sys;
 ALTER ROLE [Sistemas] ADD MEMBER user_bruno_sys;
 GO
