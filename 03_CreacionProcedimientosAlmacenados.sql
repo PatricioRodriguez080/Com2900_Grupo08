@@ -405,7 +405,7 @@ GO
 -- ARCHIVO: inquilino-propietarios-datos.csv
 -- PROCEDIMIENTO: Importar personas y su relacion con las unidades funcionales (persona_unidad_funcional)
 --------------------------------------------------------------------------------
-CREATE OR ALTER PROCEDURE consorcio.SP_importar_personas_csv
+CREATE OR ALTER PROCEDURE consorcio.SP_importar_personas
     @path NVARCHAR(255)
 AS
 BEGIN
@@ -901,6 +901,7 @@ GO
 -- NUMERO: 7
 -- ARCHIVO: datos varios.xlsx
 -- PROCEDIMIENTO: Importar Proveedores
+-- To Do: (Pato) -> Tengo que hacer el refactor cuando este el ABM de Proveedores
 --------------------------------------------------------------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_proveedores_excel
     @path NVARCHAR(255)
@@ -967,8 +968,13 @@ BEGIN
 END;
 GO
 
------------ CARGA DATOS FALTANTES A gastos_ordinarios ----------------------
-CREATE PROCEDURE consorcio.sp_procesa_actualizacion_gastos
+
+--------------------------------------------------------------------------------
+-- NUMERO: 8
+-- ARCHIVO: -
+-- PROCEDIMIENTO: Actualizacion de tabla gasto_ordinario con los datos de los proveedores
+--------------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE consorcio.SP_procesa_actualizacion_gastos
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -976,41 +982,115 @@ BEGIN
     BEGIN TRY
         BEGIN TRANSACTION;
 
-        UPDATE go 
-        SET
-          	go.nomEmpresa = CASE 
-              	WHEN CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
-                  	TRIM(LEFT(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) - 1))
-              	ELSE
-                  	TRIM(p.nomEmpresa)
-          	END,
-          	go.subTipoGasto = CASE
-              	WHEN CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
-                  	TRIM(SUBSTRING(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) + 3, LEN(p.nomEmpresa)))
-              	ELSE
-                  	go.subTipoGasto
-          	END
-        FROM
-          	consorcio.gasto_ordinario AS go
-        JOIN
-          	consorcio.gasto AS g ON go.idGasto = g.idGasto
-        JOIN
-          	consorcio.expensa AS e ON g.idExpensa = e.idExpensa
-        JOIN
-          	consorcio.proveedor AS p
-          	ON e.idConsorcio = p.idConsorcio
-          	AND UPPER(p.tipoGasto) LIKE
-              	CASE
-                  	WHEN go.tipoGasto = 'mantenimiento' THEN '%BANCARIOS%'
-                  	ELSE '%' + UPPER(go.tipoGasto) + '%'
-              	END;
+        -------------------------------------------------------------------------
+        -- 1. Crear tabla temporal de staging
+        -------------------------------------------------------------------------
+        IF OBJECT_ID('tempdb..#stg_gastosProcesados') IS NOT NULL
+            DROP TABLE #stg_gastosProcesados;
 
-        UPDATE consorcio.gasto_ordinario
+        SELECT 
+            go.idGastoOrd,
+            go.idGasto,
+            go.tipoGasto,
+            CASE 
+                WHEN CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
+                    TRIM(SUBSTRING(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) + 3, LEN(p.nomEmpresa)))
+                WHEN go.tipoGasto = 'servicios publicos' AND p.nomEmpresa LIKE '%Luz%' THEN 'Luz'
+                WHEN go.tipoGasto = 'servicios publicos' AND p.nomEmpresa LIKE '%Agua%' THEN 'Agua'
+                ELSE NULL
+            END AS subTipoGasto,
+            CASE 
+                WHEN CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
+                    TRIM(LEFT(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) - 1))
+                ELSE
+                    TRIM(p.nomEmpresa)
+            END AS nomEmpresa,
+            go.nroFactura,
+            go.importe
+        INTO #stg_gastosProcesados
+        FROM consorcio.gasto_ordinario AS go
+        JOIN consorcio.gasto AS g ON go.idGasto = g.idGasto
+        JOIN consorcio.expensa AS e ON g.idExpensa = e.idExpensa
+        JOIN consorcio.proveedor AS p
+            ON e.idConsorcio = p.idConsorcio
+            AND UPPER(p.tipoGasto) LIKE
+                CASE
+                    WHEN go.tipoGasto = 'mantenimiento' THEN '%BANCARIOS%'
+                    ELSE '%' + UPPER(go.tipoGasto) + '%'
+                END;
+
+        -------------------------------------------------------------------------
+        -- 2. Caso especial: mantenimiento -> Banco Credicoop
+        -------------------------------------------------------------------------
+        UPDATE #stg_gastosProcesados
         SET 
             subTipoGasto = 'Gastos bancario',
             nomEmpresa = 'BANCO CREDICOOP'
-        WHERE 
-            tipoGasto = 'mantenimiento';
+        WHERE tipoGasto = 'mantenimiento';
+
+        -------------------------------------------------------------------------
+        -- 3. Crear tabla numerada para iterar
+        -------------------------------------------------------------------------
+        IF OBJECT_ID('tempdb..#stg_gastosNumerados') IS NOT NULL
+            DROP TABLE #stg_gastosNumerados;
+
+        SELECT 
+            ROW_NUMBER() OVER (ORDER BY idGastoOrd) AS rn,
+            idGastoOrd, idGasto, tipoGasto, subTipoGasto, nomEmpresa, nroFactura, importe
+        INTO #stg_gastosNumerados
+        FROM #stg_gastosProcesados;
+
+        -------------------------------------------------------------------------
+        -- 4. Iterar sobre los registros y actualizar
+        -------------------------------------------------------------------------
+        DECLARE @i INT = 1;
+        DECLARE @max INT;
+        SELECT @max = MAX(rn) FROM #stg_gastosNumerados;
+
+        DECLARE 
+            @idGastoOrd INT,
+            @idGasto INT,
+            @tipoGasto VARCHAR(20),
+            @subTipoGasto VARCHAR(30),
+            @nomEmpresa VARCHAR(40),
+            @nroFactura VARCHAR(20),
+            @importe DECIMAL(12,2);
+
+        WHILE @i <= @max
+        BEGIN
+            SELECT 
+                @idGastoOrd = idGastoOrd,
+                @idGasto = idGasto,
+                @tipoGasto = tipoGasto,
+                @subTipoGasto = subTipoGasto,
+                @nomEmpresa = nomEmpresa,
+                @nroFactura = nroFactura,
+                @importe = importe
+            FROM #stg_gastosNumerados
+            WHERE rn = @i;
+
+            BEGIN TRY
+                EXEC consorcio.sp_modificarGastoOrdinario 
+                    @idGastoOrd = @idGastoOrd,
+                    @idGasto = @idGasto,
+                    @tipoGasto = @tipoGasto,
+                    @subTipoGasto = @subTipoGasto,
+                    @nomEmpresa = @nomEmpresa,
+                    @nroFactura = @nroFactura,
+                    @importe = @importe;
+            END TRY
+            BEGIN CATCH
+                PRINT 'Error al actualizar gasto ordinario con ID: ' + CAST(@idGastoOrd AS VARCHAR);
+            END CATCH;
+
+            SET @i += 1;
+        END;
+
+        -------------------------------------------------------------------------
+        -- 5. Limpieza de tablas temporales
+        -------------------------------------------------------------------------
+        DROP TABLE #stg_gastosNumerados;
+        DROP TABLE #stg_gastosProcesados;
 
         COMMIT TRANSACTION;
 
@@ -1018,7 +1098,198 @@ BEGIN
     BEGIN CATCH
         IF @@TRANCOUNT > 0
             ROLLBACK TRANSACTION;
-        THROW;
-    END CATCH
+
+        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR('Error en SP_procesa_actualizacion_gastos: %s', 16, 1, @ErrorMessage);
+    END CATCH;
+END;
+GO
+
+
+--------------------------------------------------------------------------------
+-- NÚMERO: 9
+-- ARCHIVO: -
+-- PROCEDIMIENTO: Inserción de datos a la tabla estado_financiero
+--------------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE consorcio.SP_cargar_estado_financiero
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -------------------------------------------------------------------------
+        -- 1. Reiniciar tabla destino
+        -------------------------------------------------------------------------
+        TRUNCATE TABLE consorcio.estado_financiero;
+
+        -------------------------------------------------------------------------
+        -- 2. Generar datos en staging temporal
+        -------------------------------------------------------------------------
+        IF OBJECT_ID('tempdb..#stg_estado_financiero', 'U') IS NOT NULL
+            DROP TABLE #stg_estado_financiero;
+
+        WITH CteEgresos AS (
+            SELECT
+                e.idConsorcio,
+                TRIM(e.periodo) AS periodo,
+                e.anio,
+                SUM(ISNULL(g.subTotalOrdinarios, 0) + ISNULL(g.subTotalExtraOrd, 0)) AS totalEgresos
+            FROM consorcio.expensa AS e
+            LEFT JOIN consorcio.gasto AS g ON e.idExpensa = g.idExpensa
+            GROUP BY e.idConsorcio, TRIM(e.periodo), e.anio
+        ),
+        CteIngresos AS (
+            SELECT
+                c.idConsorcio,
+                CASE MONTH(p.fecha)
+                    WHEN 1 THEN 'enero' WHEN 2 THEN 'febrero' WHEN 3 THEN 'marzo'
+                    WHEN 4 THEN 'abril' WHEN 5 THEN 'mayo' WHEN 6 THEN 'junio'
+                    WHEN 7 THEN 'julio' WHEN 8 THEN 'agosto' WHEN 9 THEN 'septiembre'
+                    WHEN 10 THEN 'octubre' WHEN 11 THEN 'noviembre' WHEN 12 THEN 'diciembre'
+                END AS periodo,
+                YEAR(p.fecha) AS anio,
+                SUM(ISNULL(p.importe, 0)) AS totalIngresos
+            FROM consorcio.pago AS p
+            JOIN consorcio.unidad_funcional AS uf ON p.cuentaOrigen = uf.cuentaOrigen
+            JOIN consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio
+            WHERE p.fecha IS NOT NULL
+            GROUP BY c.idConsorcio, MONTH(p.fecha), YEAR(p.fecha)
+        ),
+        CteCombinado AS (
+            SELECT
+                eg.idConsorcio,
+                eg.periodo,
+                eg.anio,
+                ISNULL(i.totalIngresos, 0) AS ingresosEnTermino,
+                CAST(0 AS DECIMAL(12,2)) AS ingresosAdeudados,
+                ISNULL(eg.totalEgresos, 0) AS egresos,
+                CASE eg.periodo
+                    WHEN 'enero' THEN 1 WHEN 'febrero' THEN 2 WHEN 'marzo' THEN 3
+                    WHEN 'abril' THEN 4 WHEN 'mayo' THEN 5 WHEN 'junio' THEN 6
+                    WHEN 'julio' THEN 7 WHEN 'agosto' THEN 8 WHEN 'septiembre' THEN 9
+                    WHEN 'octubre' THEN 10 WHEN 'noviembre' THEN 11 WHEN 'diciembre' THEN 12
+                END AS mesNumero
+            FROM CteEgresos AS eg
+            LEFT JOIN CteIngresos AS i
+                ON eg.idConsorcio = i.idConsorcio
+                AND eg.periodo = i.periodo
+                AND eg.anio = i.anio
+        ),
+        CteSaldos AS (
+            SELECT
+                idConsorcio,
+                periodo,
+                anio,
+                mesNumero,
+                ingresosEnTermino,
+                ingresosAdeudados,
+                egresos,
+                SUM(ingresosEnTermino + ingresosAdeudados - egresos)
+                    OVER (PARTITION BY idConsorcio ORDER BY anio, mesNumero) AS saldoCierre
+            FROM CteCombinado
+        )
+        SELECT
+            idConsorcio             AS stg_idConsorcio,
+            ISNULL(LAG(saldoCierre, 1, 0)
+                   OVER (PARTITION BY idConsorcio ORDER BY anio, mesNumero), 0) AS stg_saldoAnterior,
+            ingresosEnTermino       AS stg_ingresosEnTermino,
+            ingresosAdeudados       AS stg_ingresosAdeudados,
+            egresos                 AS stg_egresos,
+            saldoCierre             AS stg_saldoCierre,
+            periodo                 AS stg_periodo,
+            anio                    AS stg_anio
+        INTO #stg_estado_financiero
+        FROM CteSaldos
+        ORDER BY idConsorcio, anio, mesNumero;
+
+        -------------------------------------------------------------------------
+        -- 3. Crear tabla numerada para iterar
+        -------------------------------------------------------------------------
+        IF OBJECT_ID('tempdb..#stg_estado_financiero_num', 'U') IS NOT NULL
+            DROP TABLE #stg_estado_financiero_num;
+
+        SELECT 
+            ROW_NUMBER() OVER (ORDER BY stg_idConsorcio, stg_anio, stg_periodo) AS rn,
+            stg_idConsorcio,
+            stg_periodo,
+            stg_anio,
+            stg_saldoAnterior,
+            stg_ingresosEnTermino,
+            stg_ingresosAdeudados,
+            stg_egresos,
+            stg_saldoCierre
+        INTO #stg_estado_financiero_num
+        FROM #stg_estado_financiero;
+
+        -------------------------------------------------------------------------
+        -- 4. Iterar e insertar mediante consorcio.sp_insertarEstadoFinanciero
+        -------------------------------------------------------------------------
+        DECLARE @i INT = 1, @max INT;
+        SELECT @max = MAX(rn) FROM #stg_estado_financiero_num;
+
+        DECLARE
+            @stg_idConsorcio INT,
+            @stg_periodo VARCHAR(12),
+            @stg_anio INT,
+            @stg_saldoAnterior DECIMAL(12,2),
+            @stg_ingresosEnTermino DECIMAL(12,2),
+            @stg_ingresosAdeudados DECIMAL(12,2),
+            @stg_egresos DECIMAL(12,2),
+            @stg_saldoCierre DECIMAL(12,2),
+            @idEstadoFinancieroCreado INT;
+
+        WHILE @i <= @max
+        BEGIN
+            SELECT 
+                @stg_idConsorcio = stg_idConsorcio,
+                @stg_periodo = stg_periodo,
+                @stg_anio = stg_anio,
+                @stg_saldoAnterior = stg_saldoAnterior,
+                @stg_ingresosEnTermino = stg_ingresosEnTermino,
+                @stg_ingresosAdeudados = stg_ingresosAdeudados,
+                @stg_egresos = stg_egresos,
+                @stg_saldoCierre = stg_saldoCierre
+            FROM #stg_estado_financiero_num
+            WHERE rn = @i;
+
+            BEGIN TRY
+                EXEC consorcio.sp_insertarEstadoFinanciero
+                    @idConsorcio = @stg_idConsorcio,
+                    @periodo = @stg_periodo,
+                    @anio = @stg_anio,
+                    @saldoAnterior = @stg_saldoAnterior,
+                    @ingresosEnTermino = @stg_ingresosEnTermino,
+                    @ingresosAdeudados = @stg_ingresosAdeudados,
+                    @egresos = @stg_egresos,
+                    @saldoCierre = @stg_saldoCierre,
+                    @idEstadoFinancieroCreado = @idEstadoFinancieroCreado OUTPUT;
+            END TRY
+            BEGIN CATCH
+                PRINT 'Error al insertar estado financiero del consorcio ' 
+                    + CAST(@stg_idConsorcio AS VARCHAR)
+                    + ' (' + @stg_periodo + ' ' + CAST(@stg_anio AS VARCHAR) + ')';
+            END CATCH;
+
+            SET @i += 1;
+        END;
+
+        -------------------------------------------------------------------------
+        -- 5. Limpieza de staging
+        -------------------------------------------------------------------------
+        DROP TABLE #stg_estado_financiero_num;
+        DROP TABLE #stg_estado_financiero;
+
+        COMMIT TRANSACTION;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+
+        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR('Error en SP_cargar_estado_financiero: %s', 16, 1, @ErrorMessage);
+    END CATCH;
 END;
 GO

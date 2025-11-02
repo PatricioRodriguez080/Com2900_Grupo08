@@ -94,7 +94,16 @@ SELECT * FROM consorcio.proveedor
 
 --------------------------------------------------------------------------------
 -- NUMERO: 8
--- ARCHIVO: Merge entre Proveedor y GastoOrdinario
--- PROCEDIMIENTO: Importar Proveedores
+-- ARCHIVO: -
+-- PROCEDIMIENTO: Actualizacion de tabla gasto_ordinario con los datos de los proveedores
 --------------------------------------------------------------------------------
 EXEC consorcio.sp_procesa_actualizacion_gastos;
+
+SELECT * FROM consorcio.gasto_ordinario;
+
+
+--------------------------------------------------------------------------------
+-- NUMERO: 9
+-- ARCHIVO: -
+-- PROCEDIMIENTO: Insercion de datos a la tabla estado_financiero
+--------------------------------------------------------------------------------
