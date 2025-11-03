@@ -1120,14 +1120,16 @@ BEGIN
             fecha,
             cuentaOrigen,
             importe,
-            estaAsociado
+            estaAsociado,
+            idDetalleExpensa
         )
         VALUES (
             @idPago,
             ISNULL(@fecha, GETDATE()), -- Si la fecha es nula, usamos la del día
             @cuentaOrigen,
             @importe,
-            @estaAsociado
+            @estaAsociado,
+            NULL
         );
 
         PRINT 'Pago insertado con exito con ID: ' + CAST(@idPago AS VARCHAR);
@@ -1148,70 +1150,81 @@ GO
 --MODIFICAR PAGO
 ----------------
 CREATE OR ALTER PROCEDURE consorcio.sp_modificarPago
-    @idPago INT, 
-    @fecha DATE = NULL,
-    @cuentaOrigen CHAR(22) = NULL,
-    @importe DECIMAL(13,3) = NULL,
-    @estaAsociado BIT = NULL
+    @idPago INT, 
+    @fecha DATE = NULL,
+    @cuentaOrigen CHAR(22) = NULL,
+    @importe DECIMAL(13,3) = NULL,
+    @estaAsociado BIT = NULL,
+    @idDetalleExpensa INT = NULL 
 AS
 BEGIN
-    SET NOCOUNT ON;
+    SET NOCOUNT ON;
 
-    -- Validamos que el pago exista
+    -- Validamos que el pago exista y capturamos su estado actual
+    DECLARE @currentIdDetalleExpensa INT;
     DECLARE @estaAsociadoActual BIT;
-    
-    SELECT @estaAsociadoActual = estaAsociado 
-    FROM consorcio.pago 
-    WHERE idPago = @idPago;
+    
+    SELECT 
+        @estaAsociadoActual = estaAsociado,
+        @currentIdDetalleExpensa = idDetalleExpensa -- Capturamos el idDetalleExpensa actual
+    FROM consorcio.pago 
+    WHERE idPago = @idPago;
 
-    IF @estaAsociadoActual IS NULL
-    BEGIN
-        RAISERROR('Error: El pago ID %d no existe. No se puede modificar.', 16, 1, @idPago);
-        RETURN -1;
-    END
-    
-    -- si el pago fue usado en algun detalle no se puede modificar
-    IF EXISTS (SELECT 1 FROM consorcio.detalle_expensa WHERE idPago = @idPago)
-    BEGIN
-        RAISERROR('Error: El pago ID %d ya fue utilizado para pagar una factura. No se puede modificar.', 16, 1, @idPago);
-        RETURN -2;
-    END
+    IF @estaAsociadoActual IS NULL
+    BEGIN
+        RAISERROR('Error: El pago ID %d no existe. No se puede modificar.', 16, 1, @idPago);
+        RETURN -1;
+    END
+    
+    IF @currentIdDetalleExpensa IS NOT NULL
+    BEGIN
+        RAISERROR('Error: El pago ID %d ya fue utilizado y esta cerrado (asociado a la factura ID %d). No se puede modificar.', 16, 1, @idPago, @currentIdDetalleExpensa);
+        RETURN -2;
+    END
 
-    -- validamos la cuenta de origen
-    IF @cuentaOrigen IS NOT NULL AND (@cuentaOrigen = '' OR ISNUMERIC(@cuentaOrigen) = 0)
+    -- Si nos pasan un idDetalleExpensa para asociar, validamos que exista
+    IF @idDetalleExpensa IS NOT NULL AND NOT EXISTS (SELECT 1 FROM consorcio.detalle_expensa WHERE idDetalleExpensa = @idDetalleExpensa)
     BEGIN
-        RAISERROR('Error: La cuenta de origen debe ser una cadena numérica no vacía.', 16, 1);
+        RAISERROR('Error: La factura (detalle_expensa) ID %d a la que intenta asociar el pago, no existe.', 16, 1, @idDetalleExpensa);
         RETURN -3;
     END
 
-    -- validamos el importe
-    IF @importe IS NOT NULL AND @importe <= 0
-    BEGIN
-        RAISERROR('Error: El importe debe ser un valor mayor a 0.', 16, 1);
-        RETURN -4;
-    END
+    -- validamos la cuenta de origen
+    IF @cuentaOrigen IS NOT NULL AND (@cuentaOrigen = '' OR ISNUMERIC(@cuentaOrigen) = 0)
+    BEGIN
+        RAISERROR('Error: La cuenta de origen debe ser una cadena numerica no vacia.', 16, 1);
+        RETURN -4;
+    END
 
-    BEGIN TRY
-        UPDATE consorcio.pago
-        SET
-            fecha = ISNULL(@fecha, fecha),
-            cuentaOrigen = ISNULL(@cuentaOrigen, cuentaOrigen),
-            importe = ISNULL(@importe, importe),
-            estaAsociado = ISNULL(@estaAsociado, estaAsociado)
-        WHERE
-            idPago = @idPago;
+    -- validamos el importe
+    IF @importe IS NOT NULL AND @importe <= 0
+    BEGIN
+        RAISERROR('Error: El importe debe ser un valor mayor a 0.', 16, 1);
+        RETURN -5;
+    END
 
-        PRINT 'Pago con ID: ' + CAST(@idPago AS VARCHAR) + ' actualizado con exito.';
-        RETURN 0;
+    BEGIN TRY
+        UPDATE consorcio.pago
+        SET
+            fecha = ISNULL(@fecha, fecha),
+            cuentaOrigen = ISNULL(@cuentaOrigen, cuentaOrigen),
+            importe = ISNULL(@importe, importe),
+            estaAsociado = ISNULL(@estaAsociado, estaAsociado),
+            idDetalleExpensa = ISNULL(@idDetalleExpensa, idDetalleExpensa) 
+        WHERE
+            idPago = @idPago;
 
-    END TRY
-    BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al actualizar el pago: %s', 16, 1, @ErrorMessage);
-        RETURN -5;
-    END CATCH
+        PRINT 'Pago con ID: ' + CAST(@idPago AS VARCHAR) + ' actualizado con exito.';
+        RETURN 0;
 
-    SET NOCOUNT OFF;
+    END TRY
+    BEGIN CATCH
+        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR('Error inesperado al actualizar el pago: %s', 16, 1, @ErrorMessage);
+        RETURN -6;
+    END CATCH
+
+    SET NOCOUNT OFF;
 END;
 GO
 
@@ -1219,40 +1232,40 @@ GO
 --ELIMINAR PAGO
 ---------------
 CREATE OR ALTER PROCEDURE consorcio.sp_eliminarPago
-    @idPago INT
+    @idPago INT
 AS
 BEGIN
-    SET NOCOUNT ON;
+    SET NOCOUNT ON;
 
-    -- validamos q exista el pago
-    IF NOT EXISTS (SELECT 1 FROM consorcio.pago WHERE idPago = @idPago)
-    BEGIN
-        RAISERROR('Error: El pago ID %d no existe. No se puede eliminar.', 16, 1, @idPago);
-        RETURN -1;
-    END
+    -- 1. Validamos que exista el pago
+    IF NOT EXISTS (SELECT 1 FROM consorcio.pago WHERE idPago = @idPago)
+    BEGIN
+        RAISERROR('Error: El pago ID %d no existe. No se puede eliminar.', 16, 1, @idPago);
+        RETURN -1;
+    END
 
-    -- si el pago fue usado en una expensa no se puede eliminar
-    IF EXISTS (SELECT 1 FROM consorcio.detalle_expensa WHERE idPago = @idPago)
-    BEGIN
-        RAISERROR('Error: El pago ID %d ya fue utilizado para pagar una factura. No se puede eliminar.', 16, 1, @idPago);
-        RETURN -2;
-    END
+    -- validamos si el pago ya fue usado
+    IF EXISTS (SELECT 1 FROM consorcio.pago WHERE idPago = @idPago AND idDetalleExpensa IS NOT NULL)
+    BEGIN
+        RAISERROR('Error: El pago ID %d ya fue utilizado y asociado a una factura. No se puede eliminar.', 16, 1, @idPago);
+        RETURN -2;
+    END
 
-    BEGIN TRY
-        DELETE FROM consorcio.pago
-        WHERE idPago = @idPago;
+    BEGIN TRY
+        DELETE FROM consorcio.pago
+        WHERE idPago = @idPago;
 
-        PRINT 'Pago con ID: ' + CAST(@idPago AS VARCHAR) + ' eliminado con exito.';
-        RETURN 0;
+        PRINT 'Pago con ID: ' + CAST(@idPago AS VARCHAR) + ' eliminado con exito.';
+        RETURN 0;
 
-    END TRY
-    BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al eliminar el pago: %s', 16, 1, @ErrorMessage);
-        RETURN -3;
-    END CATCH
+    END TRY
+    BEGIN CATCH
+        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR('Error inesperado al eliminar el pago: %s', 16, 1, @ErrorMessage);
+        RETURN -3;
+    END CATCH
 
-    SET NOCOUNT OFF;
+    SET NOCOUNT OFF;
 END;
 GO
 
@@ -1808,106 +1821,105 @@ GO
 --INSERTAR DETALLE EXPENSA
 --------------------------
 CREATE OR ALTER PROCEDURE consorcio.sp_insertarDetalleExpensa
-    @idExpensa INT,
-    @idUnidadFuncional INT,
-    @fechaPrimerVenc DATE,
-    @saldoAnterior DECIMAL (12,2),
-    @pagoRecibido DECIMAL (12,2),
-    @deuda DECIMAL (12,2),
-    @interesPorMora DECIMAL (12, 2),
-    @expensasOrdinarias DECIMAL (12, 2),
-    @expensasExtraordinarias DECIMAL (12, 2),
-    @totalAPagar DECIMAL (12, 2),
-    @fechaEmision DATE = NULL,
-    @fechaSegundoVenc DATE = NULL,
-    @idDetalleExpensaCreado INT = NULL OUTPUT
+    @idExpensa INT,
+    @idUnidadFuncional INT,
+    @fechaPrimerVenc DATE,
+    @saldoAnterior DECIMAL (12,2),
+    @pagoRecibido DECIMAL (12,2),
+    @deuda DECIMAL (12,2),
+    @interesPorMora DECIMAL (12, 2),
+    @expensasOrdinarias DECIMAL (12, 2),
+    @expensasExtraordinarias DECIMAL (12, 2),
+    @totalAPagar DECIMAL (12, 2),
+    @fechaEmision DATE = NULL,
+    @fechaSegundoVenc DATE = NULL,
+    @idDetalleExpensaCreado INT = NULL OUTPUT
 AS
 BEGIN
-    SET NOCOUNT ON;
+    SET NOCOUNT ON;
 
-    -- validamos q exista la expensa
-    IF NOT EXISTS (SELECT 1 FROM consorcio.expensa WHERE idExpensa = @idExpensa)
-    BEGIN
-        RAISERROR('Error: La expensa %d no existe.', 16, 1, @idExpensa);
-        RETURN -1;
-    END
+    -- validamos q exista la expensa
+    IF NOT EXISTS (SELECT 1 FROM consorcio.expensa WHERE idExpensa = @idExpensa)
+    BEGIN
+        RAISERROR('Error: La expensa %d no existe.', 16, 1, @idExpensa);
+        RETURN -1;
+    END
 
-    -- validamos q la uf exista y este activa
-    IF NOT EXISTS (SELECT 1 FROM consorcio.unidad_funcional 
+    -- validamos q la uf exista y este activa
+    IF NOT EXISTS (SELECT 1 FROM consorcio.unidad_funcional 
                    WHERE idUnidadFuncional = @idUnidadFuncional AND fechaBaja IS NULL)
-    BEGIN
-        RAISERROR('Error: La UF %d no existe o esta dada de baja.', 16, 1, @idUnidadFuncional);
-        RETURN -2;
-    END
-    
-    -- validamos q no exita un detalle para la expensa y uf que se pretende insertar
-    IF EXISTS (SELECT 1 FROM consorcio.detalle_expensa
-               WHERE idExpensa = @idExpensa 
-               AND idUnidadFuncional = @idUnidadFuncional)
-    BEGIN
-        RAISERROR('Error: Ya existe una factura para la UF %d en la expensa %d. No se puede duplicar.', 16, 1, @idUnidadFuncional, @idExpensa);
-        RETURN -3;
-    END
+    BEGIN
+        RAISERROR('Error: La UF %d no existe o esta dada de baja.', 16, 1, @idUnidadFuncional);
+        RETURN -2;
+    END
+    
+    -- validamos q no exita un detalle para la expensa y uf que se pretende insertar
+    IF EXISTS (SELECT 1 FROM consorcio.detalle_expensa
+               WHERE idExpensa = @idExpensa 
+               AND idUnidadFuncional = @idUnidadFuncional)
+    BEGIN
+        RAISERROR('Error: Ya existe una factura para la UF %d en la expensa %d. No se puede duplicar.', 16, 1, @idUnidadFuncional, @idExpensa);
+        RETURN -3;
+    END
 
-    -- validamos q la uf pertenezca al consorcio de la expensa
-    DECLARE @CierreConsorcio INT, @UFConsorcio INT;
-    
-    SELECT @CierreConsorcio = idConsorcio FROM consorcio.expensa WHERE idExpensa = @idExpensa;
-    SELECT @UFConsorcio = idConsorcio FROM consorcio.unidad_funcional WHERE idUnidadFuncional = @idUnidadFuncional;
+    -- validamos q la uf pertenezca al consorcio de la expensa
+    DECLARE @CierreConsorcio INT, @UFConsorcio INT;
+    
+    SELECT @CierreConsorcio = idConsorcio FROM consorcio.expensa WHERE idExpensa = @idExpensa;
+    SELECT @UFConsorcio = idConsorcio FROM consorcio.unidad_funcional WHERE idUnidadFuncional = @idUnidadFuncional;
 
-    IF @CierreConsorcio <> @UFConsorcio
-    BEGIN
-        RAISERROR('Error: La UF %d NO pertenece al Consorcio %d. La asignación es incoherente.', 16, 1, @idUnidadFuncional, @CierreConsorcio);
-        RETURN -4;
-    END
+    IF @CierreConsorcio <> @UFConsorcio
+    BEGIN
+        RAISERROR('Error: La UF %d NO pertenece al Consorcio %d. La asignación es incoherente.', 16, 1, @idUnidadFuncional, @CierreConsorcio);
+        RETURN -4;
+    END
 
-    -- validamos fechas
-    DECLARE @emision DATE = ISNULL(@fechaEmision, GETDATE());
-    IF @emision >= @fechaPrimerVenc
-    BEGIN
-        RAISERROR('Error: La fecha de primer vencimiento debe ser posterior a la fecha de emision.', 16, 1);
-        RETURN -5;
-    END
-    
-    IF @fechaSegundoVenc IS NOT NULL AND @fechaSegundoVenc <= @fechaPrimerVenc
-    BEGIN
-        RAISERROR('Error: La fecha de segundo vencimiento debe ser posterior a la del primero.', 16, 1);
-        RETURN -6;
-    END
-    
-    -- validamos montos
-    IF @pagoRecibido < 0 OR @interesPorMora < 0 OR @expensasOrdinarias < 0 OR @expensasExtraordinarias < 0 OR @totalAPagar < 0
-    BEGIN
-        RAISERROR('Error: Los montos monetarios (pagos, intereses, expensas, total) no pueden ser negativos.', 16, 1);
-        RETURN -7;
-    END
+    -- validamos fechas
+    DECLARE @emision DATE = ISNULL(@fechaEmision, GETDATE());
+    IF @emision >= @fechaPrimerVenc
+    BEGIN
+        RAISERROR('Error: La fecha de primer vencimiento debe ser posterior a la fecha de emision.', 16, 1);
+        RETURN -5;
+    END
+    
+    IF @fechaSegundoVenc IS NOT NULL AND @fechaSegundoVenc <= @fechaPrimerVenc
+    BEGIN
+        RAISERROR('Error: La fecha de segundo vencimiento debe ser posterior a la del primero.', 16, 1);
+        RETURN -6;
+    END
+    
+    -- validamos montos
+    IF @pagoRecibido < 0 OR @interesPorMora < 0 OR @expensasOrdinarias < 0 OR @expensasExtraordinarias < 0 OR @totalAPagar < 0
+    BEGIN
+        RAISERROR('Error: Los montos monetarios (pagos, intereses, expensas, total) no pueden ser negativos.', 16, 1);
+        RETURN -7;
+    END
 
-    BEGIN TRY
-        INSERT INTO consorcio.detalle_expensa (
-            idExpensa, idUnidadFuncional, idPago, fechaEmision, fechaPrimerVenc, fechaSegundoVenc,
-            saldoAnterior, pagoRecibido, deuda, interesPorMora,
-            expensasOrdinarias, expensasExtraordinarias, totalAPagar
-        )
-        VALUES (
-            @idExpensa, @idUnidadFuncional, NULL, 
-            @emision, @fechaPrimerVenc, @fechaSegundoVenc,
-            @saldoAnterior, @pagoRecibido, @deuda, @interesPorMora,
-            @expensasOrdinarias, @expensasExtraordinarias, @totalAPagar
-        );
+    BEGIN TRY
+        INSERT INTO consorcio.detalle_expensa (
+            idExpensa, idUnidadFuncional, fechaEmision, fechaPrimerVenc, fechaSegundoVenc,
+            saldoAnterior, pagoRecibido, deuda, interesPorMora,
+            expensasOrdinarias, expensasExtraordinarias, totalAPagar
+        )
+        VALUES (
+            @idExpensa, @idUnidadFuncional, @emision, @fechaPrimerVenc, @fechaSegundoVenc,
+            @saldoAnterior, @pagoRecibido, @deuda, @interesPorMora,
+            @expensasOrdinarias, @expensasExtraordinarias, @totalAPagar
+        );
 
-        SELECT @idDetalleExpensaCreado = SCOPE_IDENTITY();
-        
-        PRINT 'Detalle de Expensa insertado con exito con ID: ' + CAST(@idDetalleExpensaCreado AS VARCHAR);
-        RETURN 0;
+        SELECT @idDetalleExpensaCreado = SCOPE_IDENTITY();
+        
+        PRINT 'Detalle de Expensa insertado con exito con ID: ' + CAST(@idDetalleExpensaCreado AS VARCHAR);
+        RETURN 0;
 
-    END TRY
-    BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al insertar el detalle de expensa: %s', 16, 1, @ErrorMessage);
-        RETURN -8;
-    END CATCH
+    END TRY
+    BEGIN CATCH
+        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR('Error inesperado al insertar el detalle de expensa: %s', 16, 1, @ErrorMessage);
+        RETURN -8;
+    END CATCH
 
-    SET NOCOUNT OFF;
+    SET NOCOUNT OFF;
 END;
 GO
 
@@ -1915,126 +1927,99 @@ GO
 --MODIFICAR DETALLE EXPENSA
 ---------------------------
 CREATE OR ALTER PROCEDURE consorcio.sp_modificarDetalleExpensa
-    @idDetalleExpensa INT,
-    @idPago INT = NULL,
-    @fechaPrimerVenc DATE = NULL,
-    @fechaSegundoVenc DATE = NULL,
-    @saldoAnterior DECIMAL (12,2) = NULL,
-    @pagoRecibido DECIMAL (12,2) = NULL,
-    @deuda DECIMAL (12,2) = NULL,
-    @interesPorMora DECIMAL (12, 2) = NULL,
-    @expensasOrdinarias DECIMAL (12, 2) = NULL,
-    @expensasExtraordinarias DECIMAL (12, 2) = NULL,
-    @totalAPagar DECIMAL (12, 2) = NULL,
-    @fechaEmision DATE = NULL
+  	@idDetalleExpensa INT,
+  	@fechaPrimerVenc DATE = NULL,
+  	@fechaSegundoVenc DATE = NULL,
+  	@saldoAnterior DECIMAL (12,2) = NULL,
+  	@pagoRecibido DECIMAL (12,2) = NULL,
+  	@deuda DECIMAL (12,2) = NULL,
+  	@interesPorMora DECIMAL (12, 2) = NULL,
+  	@expensasOrdinarias DECIMAL (12, 2) = NULL,
+  	@expensasExtraordinarias DECIMAL (12, 2) = NULL,
+  	@totalAPagar DECIMAL (12, 2) = NULL,
+  	@fechaEmision DATE = NULL
 AS
 BEGIN
-    SET NOCOUNT ON;
+  	SET NOCOUNT ON;
 
-    -- validamos q exista el detalle y nos guardamos datos q nos interesan para validar
-    DECLARE @currentIdPago INT;
-    DECLARE @currentFechaEmision DATE;
-    DECLARE @currentFechaPrimerVenc DATE;
-    
-    SELECT 
-        @currentIdPago = idPago,
-        @currentFechaEmision = fechaEmision,
-        @currentFechaPrimerVenc = fechaPrimerVenc
-    FROM consorcio.detalle_expensa 
-    WHERE idDetalleExpensa = @idDetalleExpensa;
+  	-- validamos q exista el detalle y nos guardamos datos q nos interesan para validar
+  	DECLARE @currentFechaEmision DATE;
+  	DECLARE @currentFechaPrimerVenc DATE;
+    
+  	SELECT 
+      	@currentFechaEmision = fechaEmision,
+      	@currentFechaPrimerVenc = fechaPrimerVenc
+  	FROM consorcio.detalle_expensa 
+  	WHERE idDetalleExpensa = @idDetalleExpensa;
 
-    IF @currentFechaEmision IS NULL 
-    BEGIN
-        RAISERROR('Error: El detalle de expensa con ID %d no existe.', 16, 1, @idDetalleExpensa);
-        RETURN -1;
-    END
+  	IF @currentFechaEmision IS NULL 
+  	BEGIN
+      	RAISERROR('Error: El detalle de expensa con ID %d no existe.', 16, 1, @idDetalleExpensa);
+      	RETURN -1;
+  	END
 
-    -- si la expensa esta pagada no se permite modificar nada
-    IF @currentIdPago IS NOT NULL
-    BEGIN
-        RAISERROR('Error: La factura ID %d ya esta pagada (asociada al Pago ID %d). No se puede modificar.', 16, 1, @idDetalleExpensa, @currentIdPago);
-        RETURN -2;
-    END
+  	IF @fechaEmision IS NOT NULL
+  	BEGIN
+      	RAISERROR('Error: No se permite modificar la fecha de emision de una factura existente.', 16, 1);
+      	RETURN -5;
+  	END
 
-    -- Si se pasa un idPago al SP asumimos que se pretende pagar el detalle expensa
-    IF @idPago IS NOT NULL
-    BEGIN
-        -- validamos q el pago exista en la tabla de pago
-        IF NOT EXISTS (SELECT 1 FROM consorcio.pago WHERE idPago = @idPago)
-        BEGIN
-            RAISERROR('Error: El Pago ID %d no existe.', 16, 1, @idPago);
-            RETURN -3;
-        END
+  	-- validamos fechas de vencimiento
+  	IF @fechaPrimerVenc IS NOT NULL AND @fechaPrimerVenc <= @currentFechaEmision
+  	BEGIN
+        DECLARE @fechaEmisionStr VARCHAR(10) = CONVERT(VARCHAR, @currentFechaEmision, 103);
+      	RAISERROR('Error: La nueva fecha de primer vencimiento debe ser posterior a la fecha de emision (%s).', 16, 1, @fechaEmisionStr);
+      	RETURN -6;
+  	END
+
+  	-- Determinamos el valor final del primer vencimiento para la siguiente validacion
+  	DECLARE @finalPrimerVenc DATE = ISNULL(@fechaPrimerVenc, @currentFechaPrimerVenc);
+
+  	IF @fechaSegundoVenc IS NOT NULL AND @fechaSegundoVenc <= @finalPrimerVenc
+  	BEGIN
+        DECLARE @finalPrimerVencStr VARCHAR(10) = CONVERT(VARCHAR, @finalPrimerVenc, 103);
+      	RAISERROR('Error: La nueva fecha de segundo vencimiento debe ser posterior a la del primero (%s).', 16, 1, @finalPrimerVencStr);
+      	RETURN -7;
+  	END
+
+  	-- validamos montos
+  	IF (@pagoRecibido IS NOT NULL AND @pagoRecibido < 0) OR
+      	(@interesPorMora IS NOT NULL AND @interesPorMora < 0) OR
+      	(@expensasOrdinarias IS NOT NULL AND @expensasOrdinarias < 0) OR
+      	(@expensasExtraordinarias IS NOT NULL AND @expensasExtraordinarias < 0) OR
+      	(@totalAPagar IS NOT NULL AND @totalAPagar < 0)
+  	BEGIN
+      	RAISERROR('Error: Los montos monetarios (pago recibido, mora, expensas, total) no pueden ser negativos.', 16, 1);
+      	RETURN -8;
+  	END
+
+  	BEGIN TRY
         
-        -- validamos q el mismo idPago no este en otro detalle
-        IF EXISTS (SELECT 1 FROM consorcio.detalle_expensa WHERE idPago = @idPago)
-        BEGIN
-            RAISERROR('Error: El Pago ID %d ya esta en uso en otra factura.', 16, 1, @idPago);
-            RETURN -4;
-        END
-    END
+      	UPDATE consorcio.detalle_expensa
+      	SET
+          	fechaPrimerVenc = ISNULL(@fechaPrimerVenc, fechaPrimerVenc),
+          	fechaSegundoVenc = ISNULL(@fechaSegundoVenc, fechaSegundoVenc),
+          	saldoAnterior = ISNULL(@saldoAnterior, saldoAnterior),
+          	pagoRecibido = ISNULL(@pagoRecibido, pagoRecibido),
+          	deuda = ISNULL(@deuda, deuda),
+          	interesPorMora = ISNULL(@interesPorMora, interesPorMora),
+          	expensasOrdinarias = ISNULL(@expensasOrdinarias, expensasOrdinarias),
+          	expensasExtraordinarias = ISNULL(@expensasExtraordinarias, expensasExtraordinarias),
+          	totalAPagar = ISNULL(@totalAPagar, totalAPagar)
+      	WHERE
+          	idDetalleExpensa = @idDetalleExpensa;
 
-    IF @fechaEmision IS NOT NULL
-    BEGIN
-        RAISERROR('Error: No se permite modificar la fecha de emision de una factura existente.', 16, 1);
-        RETURN -5;
-    END
+      	PRINT 'Detalle de Expensa ID ' + CAST(@idDetalleExpensa AS VARCHAR) + ' actualizado con exito.';
+      	RETURN 0;
 
-    -- validamos fechas de vencimiento
-    IF @fechaPrimerVenc IS NOT NULL AND @fechaPrimerVenc <= @currentFechaEmision -- Usamos la fecha de emisión capturada
-    BEGIN
-        RAISERROR('Error: La nueva fecha de primer vencimiento debe ser posterior a la fecha de emision', 16, 1);
-        RETURN -6;
-    END
+  	END TRY
+  	BEGIN CATCH
+      	DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+      	RAISERROR('Error inesperado al actualizar el detalle: %s', 16, 1, @ErrorMessage);
+      	RETURN -9;
+  	END CATCH
 
-    -- Determinamos el valor final del primer vencimiento para la siguiente validación
-    DECLARE @finalPrimerVenc DATE = ISNULL(@fechaPrimerVenc, @currentFechaPrimerVenc);
-
-    IF @fechaSegundoVenc IS NOT NULL AND @fechaSegundoVenc <= @finalPrimerVenc
-    BEGIN
-        RAISERROR('Error: La nueva fecha de segundo vencimiento debe ser posterior a la del primero.', 16, 1);
-        RETURN -7;
-    END
-
-    -- validamos montos
-    IF (@pagoRecibido IS NOT NULL AND @pagoRecibido < 0) OR
-       (@interesPorMora IS NOT NULL AND @interesPorMora < 0) OR
-       (@expensasOrdinarias IS NOT NULL AND @expensasOrdinarias < 0) OR
-       (@expensasExtraordinarias IS NOT NULL AND @expensasExtraordinarias < 0) OR
-       (@totalAPagar IS NOT NULL AND @totalAPagar < 0)
-    BEGIN
-        RAISERROR('Error: Los montos monetarios (pago recibido, mora, expensas, total o deuda) no pueden ser negativos.', 16, 1);
-        RETURN -8;
-    END
-
-    BEGIN TRY
-        
-        UPDATE consorcio.detalle_expensa
-        SET
-            idPago = ISNULL(@idPago, idPago),
-            fechaPrimerVenc = ISNULL(@fechaPrimerVenc, fechaPrimerVenc),
-            fechaSegundoVenc = ISNULL(@fechaSegundoVenc, fechaSegundoVenc),
-            saldoAnterior = ISNULL(@saldoAnterior, saldoAnterior),
-            pagoRecibido = ISNULL(@pagoRecibido, pagoRecibido),
-            deuda = ISNULL(@deuda, deuda),
-            interesPorMora = ISNULL(@interesPorMora, interesPorMora),
-            expensasOrdinarias = ISNULL(@expensasOrdinarias, expensasOrdinarias),
-            expensasExtraordinarias = ISNULL(@expensasExtraordinarias, expensasExtraordinarias),
-            totalAPagar = ISNULL(@totalAPagar, totalAPagar)
-        WHERE
-            idDetalleExpensa = @idDetalleExpensa;
-
-        PRINT 'Detalle de Expensa ID ' + CAST(@idDetalleExpensa AS VARCHAR) + ' actualizado con exito.';
-        RETURN 0;
-
-    END TRY
-    BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al actualizar el detalle: %s', 16, 1, @ErrorMessage);
-        RETURN -9;
-    END CATCH
-
-    SET NOCOUNT OFF;
+  	SET NOCOUNT OFF;
 END;
 GO
 
@@ -2042,50 +2027,40 @@ GO
 --ELIMINAR DETALLE EXPENSA
 --------------------------
 CREATE OR ALTER PROCEDURE consorcio.sp_eliminarDetalleExpensa
-    @idDetalleExpensa INT
+    @idDetalleExpensa INT
 AS
 BEGIN
-    SET NOCOUNT ON;
+    SET NOCOUNT ON;
 
-    -- valido q el detalle exista y no este pagado
-    
-    DECLARE @currentIdPago INT;
-    DECLARE @checkExistence BIT = 0; -- flag para ver si lo encontramos
+    -- 1. valido q el detalle exista
+    IF NOT EXISTS (SELECT 1 FROM consorcio.detalle_expensa WHERE idDetalleExpensa = @idDetalleExpensa)
+    BEGIN
+        RAISERROR('Error: El detalle de expensa ID %d no existe. No se puede eliminar.', 16, 1, @idDetalleExpensa);
+        RETURN -1;
+    END
 
-    SELECT 
-        @currentIdPago = idPago,
-        @checkExistence = 1
-    FROM consorcio.detalle_expensa 
-    WHERE idDetalleExpensa = @idDetalleExpensa;
+    -- validamos si tiene algun pago asociado
+    IF EXISTS (SELECT 1 FROM consorcio.pago WHERE idDetalleExpensa = @idDetalleExpensa)
+    BEGIN
+        RAISERROR('Error: La factura ID %d ya tiene uno o mas pagos asociados. No se puede eliminar.', 16, 1, @idDetalleExpensa);
+        RETURN -2;
+    END
 
-    IF @checkExistence = 0
-    BEGIN
-        RAISERROR('Error: El detalle de expensa ID %d no existe. No se puede eliminar.', 16, 1, @idDetalleExpensa);
-        RETURN -1;
-    END
+    BEGIN TRY
+        DELETE FROM consorcio.detalle_expensa
+        WHERE idDetalleExpensa = @idDetalleExpensa;
 
-    -- validamos si esta pagada
-    IF @currentIdPago IS NOT NULL
-    BEGIN
-        RAISERROR('Error: La factura ID %d ya esta pagada (asociada al Pago ID %d). No se puede eliminar.', 16, 1, @idDetalleExpensa, @currentIdPago);
-        RETURN -2;
-    END
+        PRINT 'Detalle de Expensa con ID: ' + CAST(@idDetalleExpensa AS VARCHAR) + ' eliminado con exito.';
+        RETURN 0;
 
-    BEGIN TRY
-        DELETE FROM consorcio.detalle_expensa
-        WHERE idDetalleExpensa = @idDetalleExpensa;
+    END TRY
+    BEGIN CATCH
+        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR('Error inesperado al eliminar el detalle de expensa: %s', 16, 1, @ErrorMessage);
+        RETURN -3;
+    END CATCH
 
-        PRINT 'Detalle de Expensa con ID: ' + CAST(@idDetalleExpensa AS VARCHAR) + ' eliminado con exito.';
-        RETURN 0;
-
-    END TRY
-    BEGIN CATCH
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error inesperado al eliminar el detalle de expensa: %s', 16, 1, @ErrorMessage);
-        RETURN -3;
-    END CATCH
-
-    SET NOCOUNT OFF;
+  	SET NOCOUNT OFF;
 END;
 GO
 
