@@ -18,17 +18,17 @@ IF NOT EXISTS (SELECT * FROM  sys.schemas WHERE name = 'consorcio')
 GO
 
 DROP TABLE IF EXISTS consorcio.gasto_extra_ordinario;
-DROP TABLE IF EXISTS consorcio.gasto_ordinario;
+DROP TABLE IF EXISTS consorcio.gasto_ordinario; 
 DROP TABLE IF EXISTS consorcio.gasto;
-DROP TABLE IF EXISTS consorcio.detalle_expensa;
-DROP TABLE IF EXISTS consorcio.expensa;
-DROP TABLE IF EXISTS consorcio.pago;
-DROP TABLE IF EXISTS consorcio.persona_unidad_funcional;
 DROP TABLE IF EXISTS consorcio.baulera;
 DROP TABLE IF EXISTS consorcio.cochera;
-DROP TABLE IF EXISTS consorcio.unidad_funcional;
+DROP TABLE IF EXISTS consorcio.persona_unidad_funcional;
+DROP TABLE IF EXISTS consorcio.pago;
+DROP TABLE IF EXISTS consorcio.detalle_expensa;
+DROP TABLE IF EXISTS consorcio.expensa;
 DROP TABLE IF EXISTS consorcio.estado_financiero;
 DROP TABLE IF EXISTS consorcio.proveedor;
+DROP TABLE IF EXISTS consorcio.unidad_funcional;
 DROP TABLE IF EXISTS consorcio.persona;
 DROP TABLE IF EXISTS consorcio.consorcio;
 GO
