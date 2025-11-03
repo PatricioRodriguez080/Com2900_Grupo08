@@ -12,6 +12,8 @@ Integrantes:
 Enunciado:        "05 - Creación de Reportes y APIs"
 ===============================================================================
 */
+
+
 --------------------------------------------------------------------------------
 -- REPORTE 2
 -- Total de recaudación por mes y departamento en formato de tabla cruzada
@@ -24,15 +26,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    SELECT
-        Mes,
-        ISNULL([A], 0) AS [A],
-        ISNULL([B], 0) AS [B],
-        ISNULL([C], 0) AS [C],
-        ISNULL([D], 0) AS [D],
-        ISNULL([E], 0) AS [E]
-    FROM
-    (
+    ;WITH PagosPivot AS (
         SELECT
             CASE MONTH(p.fecha)
                 WHEN 1 THEN 'enero'
@@ -49,26 +43,40 @@ BEGIN
                 WHEN 12 THEN 'diciembre'
             END AS Mes,
             MONTH(p.fecha) AS MesNumero,
-            uf.departamento,
-            p.importe
-        FROM
-            consorcio.pago AS p JOIN consorcio.unidad_funcional AS uf ON p.cuentaOrigen = uf.cuentaOrigen
+            ISNULL(SUM(CASE WHEN uf.departamento = 'A' THEN p.importe END), 0) AS A,
+            ISNULL(SUM(CASE WHEN uf.departamento = 'B' THEN p.importe END), 0) AS B,
+            ISNULL(SUM(CASE WHEN uf.departamento = 'C' THEN p.importe END), 0) AS C,
+            ISNULL(SUM(CASE WHEN uf.departamento = 'D' THEN p.importe END), 0) AS D,
+            ISNULL(SUM(CASE WHEN uf.departamento = 'E' THEN p.importe END), 0) AS E
+        FROM consorcio.pago AS p
+        JOIN consorcio.unidad_funcional AS uf ON p.cuentaOrigen = uf.cuentaOrigen
         WHERE
             uf.idConsorcio = @idConsorcio
             AND YEAR(p.fecha) = @Anio
             AND (@Piso IS NULL OR uf.piso = @Piso)
-    ) AS FuenteDatos
-    PIVOT
-    (
-        SUM(importe)
-        FOR departamento IN ([A], [B], [C], [D], [E]
+        GROUP BY MONTH(p.fecha)
+    )
+    SELECT
+        Mes AS [@nombre],
+        (
+            SELECT
+                Departamento.nombre AS [Departamento/@nombre],
+                Departamento.Monto AS [Departamento/Monto]
+            FROM (
+                SELECT 'A' AS nombre, A AS Monto
+                UNION ALL SELECT 'B', B
+                UNION ALL SELECT 'C', C
+                UNION ALL SELECT 'D', D
+                UNION ALL SELECT 'E', E
+            ) AS Departamento
+            FOR XML PATH(''), ROOT('Departamentos'), TYPE
         )
-    ) AS PivotTabla
-    ORDER BY
-        MesNumero;
-
+    FROM PagosPivot
+    ORDER BY MesNumero
+    FOR XML PATH('Mes'), ROOT('ReportePagos');
 END;
 GO
+
 
 EXEC consorcio.SP_reporte_2
     @idConsorcio = 1,
@@ -89,6 +97,8 @@ WHERE
 GROUP BY
     c.nombre,
     uf.departamento;
+
+
 --------------------------------------------------------------------------------
 -- REPORTE 4
 -- Obtener los 5 (cinco) meses de mayores gastos y los 5 (cinco) de mayores ingresos
