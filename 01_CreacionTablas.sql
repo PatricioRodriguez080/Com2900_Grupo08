@@ -130,7 +130,9 @@ CREATE TABLE consorcio.pago(
     cuentaOrigen CHAR(22) NOT NULL,
     importe DECIMAL (13,3) NOT NULL,
     estaAsociado BIT NOT NULL,
+    idDetalleExpensa INT NULL,
 
+    CONSTRAINT fk_pago_detalleExpensa FOREIGN KEY (idDetalleExpensa) REFERENCES consorcio.detalle_expensa(idDetalleExpensa),
     CONSTRAINT chk_pago_cuentaOrigen CHECK (ISNUMERIC(cuentaOrigen) = 1),
     CONSTRAINT chk_pago_importe CHECK (importe > 0)
 );
@@ -150,7 +152,6 @@ CREATE TABLE consorcio.detalle_expensa (
     idDetalleExpensa INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
     idExpensa INT NOT NULL,
     idUnidadFuncional INT NOT NULL,
-    idPago INT NULL,
     fechaEmision DATE NOT NULL DEFAULT GETDATE(),
     fechaPrimerVenc DATE NOT NULL,
     fechaSegundoVenc DATE,
@@ -164,7 +165,6 @@ CREATE TABLE consorcio.detalle_expensa (
 
     CONSTRAINT fk_detalleExpensa_expensa FOREIGN KEY (idExpensa) REFERENCES consorcio.expensa(idExpensa),
     CONSTRAINT fk_detalleExpensa_unidadFuncional FOREIGN KEY (idUnidadFuncional) REFERENCES consorcio.unidad_funcional(idUnidadFuncional),
-    CONSTRAINT fk_detalleExpensa_pago FOREIGN KEY (idPago) REFERENCES consorcio.pago(idPago),
     CONSTRAINT uq_detalle_expensa_unica UNIQUE (idExpensa, idUnidadFuncional),
     CONSTRAINT chk_detalleExpensa_fechaPrimerVenc CHECK (fechaPrimerVenc > fechaEmision),
     CONSTRAINT chk_detalleExpensa_fechaSegundoVenc CHECK (fechaSegundoVenc IS NULL OR fechaSegundoVenc > fechaPrimerVenc),
