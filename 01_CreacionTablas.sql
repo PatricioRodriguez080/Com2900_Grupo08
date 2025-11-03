@@ -166,7 +166,7 @@ CREATE TABLE consorcio.pago(
     idPago INT PRIMARY KEY NOT NULL,
     fecha DATE,
     cuentaOrigen CHAR(22) NOT NULL,
-    importe DECIMAL (13,3) NOT NULL,
+    importe DECIMAL (13,2) NOT NULL,
     estaAsociado BIT NOT NULL,
     idDetalleExpensa INT NULL,
 
