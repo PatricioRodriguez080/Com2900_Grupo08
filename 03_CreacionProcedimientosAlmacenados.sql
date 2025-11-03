@@ -21,8 +21,8 @@ Enunciado:        "04 - Creación de Procedimientos Almacenados"
 --------------------------------------------------------------------------------
 
 -- Enable Ad Hoc Distributed Queries
-EXEC sp_configure 'show advanced options', 1; RECONFIGURE;
-EXEC sp_configure 'Ad Hoc Distributed Queries', 1; RECONFIGURE;
+ EXEC sp_configure 'show advanced options', 1; RECONFIGURE;
+ EXEC sp_configure 'Ad Hoc Distributed Queries', 1; RECONFIGURE;
 GO
 
 -- Set provider properties for Microsoft.ACE.OLEDB.12.0
@@ -1013,128 +1013,91 @@ BEGIN
         BEGIN TRANSACTION;
 
         -------------------------------------------------------------------------
-        -- 1. Crear tabla temporal de staging
+        -- 1. Crear tabla temporal de staging (Preparación de datos)
         -------------------------------------------------------------------------
-        IF OBJECT_ID('tempdb..#stg_gastosProcesados') IS NOT NULL
-            DROP TABLE #stg_gastosProcesados;
+        -- Usamos IF EXISTS y DROP en una sola línea para ser directos
+        IF OBJECT_ID('tempdb..#stg_gastosProcesados') IS NOT NULL DROP TABLE #stg_gastosProcesados;
 
         SELECT 
             go.idGastoOrd,
-            go.idGasto,
-            go.tipoGasto,
+            
+            -- Calculamos el nuevo subTipoGasto.
             CASE 
+
+                -- 2. Extracción de Subtipo (Si el nombre tiene el formato 'EMPRESA - SUBTIPO')
                 WHEN CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
                     TRIM(SUBSTRING(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) + 3, LEN(p.nomEmpresa)))
-                WHEN go.tipoGasto = 'servicios publicos' AND p.nomEmpresa LIKE '%Luz%' THEN 'Luz'
-                WHEN go.tipoGasto = 'servicios publicos' AND p.nomEmpresa LIKE '%Agua%' THEN 'Agua'
-                ELSE NULL
-            END AS subTipoGasto,
+                
+                -- 3. Mapeo Simple (Valores por defecto para tipos comunes)
+                WHEN go.tipoGasto = 'administracion' THEN 'Honorarios'
+                WHEN go.tipoGasto = 'limpieza' THEN 'Servicio General'
+                WHEN go.tipoGasto = 'generales' THEN 'Varios'
+                
+                -- 4. Si nada coincide, se usará el valor actual de la tabla (manejo en el UPDATE)
+                ELSE NULL 
+            END AS subTipoGasto_nuevo,
+            
+            -- Calculamos el nuevo nomEmpresa
             CASE 
+                -- Extraemos el nombre antes del ' - '
                 WHEN CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
                     TRIM(LEFT(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) - 1))
+                -- Si no tiene ' - ', usamos el nombre completo
                 ELSE
                     TRIM(p.nomEmpresa)
-            END AS nomEmpresa,
-            go.nroFactura,
-            go.importe
+            END AS nomEmpresa_nuevo
+            
         INTO #stg_gastosProcesados
         FROM consorcio.gasto_ordinario AS go
         JOIN consorcio.gasto AS g ON go.idGasto = g.idGasto
         JOIN consorcio.expensa AS e ON g.idExpensa = e.idExpensa
-        JOIN consorcio.proveedor AS p
+        -- Usamos LEFT JOIN para asegurarnos de que el gasto se procese AUN si no hay proveedor asociado
+        LEFT JOIN consorcio.proveedor AS p
             ON e.idConsorcio = p.idConsorcio
-            AND UPPER(p.tipoGasto) LIKE
-                CASE
-                    WHEN go.tipoGasto = 'mantenimiento' THEN '%BANCARIOS%'
-                    ELSE '%' + UPPER(go.tipoGasto) + '%'
-                END;
+            -- La condición de mapeo entre el Gasto y el Proveedor
+            AND UPPER(p.tipoGasto) LIKE '%' + UPPER(go.tipoGasto) + '%'; 
 
         -------------------------------------------------------------------------
-        -- 2. Caso especial: mantenimiento -> Banco Credicoop
+        -- 2. Aplicar la actualización de datos (Actualización basada en conjuntos)
         -------------------------------------------------------------------------
-        UPDATE #stg_gastosProcesados
+        UPDATE go
         SET 
-            subTipoGasto = 'Gastos bancario',
-            nomEmpresa = 'BANCO CREDICOOP'
-        WHERE tipoGasto = 'mantenimiento';
+            -- Si el valor nuevo es NULL, COALESCE mantiene el valor original de la columna (go.subTipoGasto)
+            go.subTipoGasto = COALESCE(stg.subTipoGasto_nuevo, go.subTipoGasto), 
+            go.nomEmpresa = COALESCE(stg.nomEmpresa_nuevo, go.nomEmpresa)
+            
+        FROM consorcio.gasto_ordinario AS go
+        -- Unimos la tabla a actualizar con la tabla temporal de datos ya procesados
+        INNER JOIN #stg_gastosProcesados AS stg
+            ON go.idGastoOrd = stg.idGastoOrd
+        -- Quitamos el WHERE complejo para ser más simple; se actualizará todo lo que haya cambiado o no.
+        -- Nota: Esto es más simple pero puede actualizar filas innecesariamente.
+        ;
+
+        PRINT CAST(@@ROWCOUNT AS VARCHAR) + ' gastos ordinarios actualizados.';
 
         -------------------------------------------------------------------------
-        -- 3. Crear tabla numerada para iterar
+        -- 3. Limpieza de tablas temporales
         -------------------------------------------------------------------------
-        IF OBJECT_ID('tempdb..#stg_gastosNumerados') IS NOT NULL
-            DROP TABLE #stg_gastosNumerados;
-
-        SELECT 
-            ROW_NUMBER() OVER (ORDER BY idGastoOrd) AS rn,
-            idGastoOrd, idGasto, tipoGasto, subTipoGasto, nomEmpresa, nroFactura, importe
-        INTO #stg_gastosNumerados
-        FROM #stg_gastosProcesados;
-
-        -------------------------------------------------------------------------
-        -- 4. Iterar sobre los registros y actualizar
-        -------------------------------------------------------------------------
-        DECLARE @i INT = 1;
-        DECLARE @max INT;
-        SELECT @max = MAX(rn) FROM #stg_gastosNumerados;
-
-        DECLARE 
-            @idGastoOrd INT,
-            @idGasto INT,
-            @tipoGasto VARCHAR(20),
-            @subTipoGasto VARCHAR(30),
-            @nomEmpresa VARCHAR(40),
-            @nroFactura VARCHAR(20),
-            @importe DECIMAL(12,2);
-
-        WHILE @i <= @max
-        BEGIN
-            SELECT 
-                @idGastoOrd = idGastoOrd,
-                @idGasto = idGasto,
-                @tipoGasto = tipoGasto,
-                @subTipoGasto = subTipoGasto,
-                @nomEmpresa = nomEmpresa,
-                @nroFactura = nroFactura,
-                @importe = importe
-            FROM #stg_gastosNumerados
-            WHERE rn = @i;
-
-            BEGIN TRY
-                EXEC consorcio.sp_modificarGastoOrdinario 
-                    @idGastoOrd = @idGastoOrd,
-                    @idGasto = @idGasto,
-                    @tipoGasto = @tipoGasto,
-                    @subTipoGasto = @subTipoGasto,
-                    @nomEmpresa = @nomEmpresa,
-                    @nroFactura = @nroFactura,
-                    @importe = @importe;
-            END TRY
-            BEGIN CATCH
-                PRINT 'Error al actualizar gasto ordinario con ID: ' + CAST(@idGastoOrd AS VARCHAR);
-            END CATCH;
-
-            SET @i += 1;
-        END;
-
-        -------------------------------------------------------------------------
-        -- 5. Limpieza de tablas temporales
-        -------------------------------------------------------------------------
-        DROP TABLE #stg_gastosNumerados;
         DROP TABLE #stg_gastosProcesados;
 
         COMMIT TRANSACTION;
 
     END TRY
     BEGIN CATCH
+        -- Manejo básico de errores: Rollback y lanzar el error original
         IF @@TRANCOUNT > 0
             ROLLBACK TRANSACTION;
 
         DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR('Error en SP_procesa_actualizacion_gastos: %s', 16, 1, @ErrorMessage);
+        DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
+        DECLARE @ErrorState INT = ERROR_STATE();
+
+        RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
+        RETURN;
     END CATCH;
 END;
 GO
-
 
 --------------------------------------------------------------------------------
 -- NÚMERO: 9
