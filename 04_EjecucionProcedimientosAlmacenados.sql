@@ -42,6 +42,7 @@ SELECT * FROM consorcio.cochera;
 EXEC consorcio.SP_importar_unidades_funcionales_csv @path = 'C:\Archivos para el TP\Inquilino-propietarios-UF.csv';
 
 SELECT * FROM consorcio.unidad_funcional;
+
 SELECT
     uf.cuentaOrigen,
     c.nombre AS nombre_consorcio,
@@ -51,7 +52,7 @@ SELECT
 FROM
     consorcio.unidad_funcional AS uf
 JOIN
-    consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio
+    consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio;
 
 --------------------------------------------------------------------------------
 -- NUMERO: 4
@@ -79,9 +80,9 @@ SELECT * FROM consorcio.pago;
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_carga_expensas @path = 'C:\Archivos para el TP\Servicios.Servicios.json'
 
-SELECT * FROM consorcio.expensa
-SELECT * FROM consorcio.gasto
-SELECT * FROM consorcio.gasto_ordinario
+SELECT * FROM consorcio.expensa;
+SELECT * FROM consorcio.gasto;
+SELECT * FROM consorcio.gasto_ordinario;
 
 --------------------------------------------------------------------------------
 -- NUMERO: 7
