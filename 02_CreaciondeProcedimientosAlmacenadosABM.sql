@@ -812,7 +812,7 @@ BEGIN
     END
 
     -- validamos q el consorcio no tenga UF linkeadas activas
-    IF EXISTS (SELECT 1 FROM consorcio.UnidadFuncional 
+    IF EXISTS (SELECT 1 FROM consorcio.unidad_funcional 
                WHERE idConsorcio = @idConsorcio 
                AND fechaBaja IS NULL)
     BEGIN
@@ -1367,7 +1367,7 @@ BEGIN
     BEGIN TRY
         UPDATE consorcio.cochera
         SET
-            idUnidadFuncional = ISNULL(@idUnidadFuncional, idUnidadFuncional),
+            idUnidadFuncional = @idUnidadFuncional,
             metrosCuadrados = ISNULL(@metrosCuadrados, metrosCuadrados),
             coeficiente = ISNULL(@coeficiente, coeficiente)
         WHERE
@@ -1540,7 +1540,7 @@ BEGIN
     BEGIN TRY
         UPDATE consorcio.baulera
         SET
-            idUnidadFuncional = ISNULL(@idUnidadFuncional, idUnidadFuncional),
+            idUnidadFuncional = @idUnidadFuncional,
             metrosCuadrados = ISNULL(@metrosCuadrados, metrosCuadrados),
             coeficiente = ISNULL(@coeficiente, coeficiente)
         WHERE
