@@ -124,19 +124,6 @@ CREATE TABLE consorcio.persona_unidad_funcional(
     CONSTRAINT chk_rol CHECK (rol IN ('propietario', 'inquilino'))
 );
 
-CREATE TABLE consorcio.pago(
-    idPago INT PRIMARY KEY NOT NULL,
-    fecha DATE,
-    cuentaOrigen CHAR(22) NOT NULL,
-    importe DECIMAL (13,3) NOT NULL,
-    estaAsociado BIT NOT NULL,
-    idDetalleExpensa INT NULL,
-
-    CONSTRAINT fk_pago_detalleExpensa FOREIGN KEY (idDetalleExpensa) REFERENCES consorcio.detalle_expensa(idDetalleExpensa),
-    CONSTRAINT chk_pago_cuentaOrigen CHECK (ISNUMERIC(cuentaOrigen) = 1),
-    CONSTRAINT chk_pago_importe CHECK (importe > 0)
-);
-
 CREATE TABLE consorcio.expensa(
     idExpensa INT IDENTITY (1,1) PRIMARY KEY,
     idConsorcio INT NOT NULL, 
@@ -173,6 +160,19 @@ CREATE TABLE consorcio.detalle_expensa (
     CONSTRAINT chk_detalleExpensa_expensasOrdinarias CHECK (expensasOrdinarias >= 0),
     CONSTRAINT chk_detalleExpensa_expensasExtraOrdinarias CHECK (expensasExtraOrdinarias >= 0),
     CONSTRAINT chk_detalleExpensa_totalAPagar CHECK (totalAPagar >= 0)
+);
+
+CREATE TABLE consorcio.pago(
+    idPago INT PRIMARY KEY NOT NULL,
+    fecha DATE,
+    cuentaOrigen CHAR(22) NOT NULL,
+    importe DECIMAL (13,3) NOT NULL,
+    estaAsociado BIT NOT NULL,
+    idDetalleExpensa INT NULL,
+
+    CONSTRAINT fk_pago_detalleExpensa FOREIGN KEY (idDetalleExpensa) REFERENCES consorcio.detalle_expensa(idDetalleExpensa),
+    CONSTRAINT chk_pago_cuentaOrigen CHECK (ISNUMERIC(cuentaOrigen) = 1),
+    CONSTRAINT chk_pago_importe CHECK (importe > 0)
 );
 
 CREATE TABLE consorcio.gasto (
