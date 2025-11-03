@@ -685,7 +685,8 @@ BEGIN
             @idPago = CAST(stg_idPago AS INT),
             @fecha = TRY_CONVERT(DATE, stg_fecha, 103),
             @cuentaOrigen = CAST(LTRIM(RTRIM(stg_cvu_cbu)) AS CHAR(22)),
-            @importe = CAST(REPLACE(LTRIM(RTRIM(stg_valor)),'$','') AS DECIMAL(13,3))
+            @importe = CAST(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(stg_valor)),'$',''),'.',''),',','.') 
+        AS DECIMAL(13,3))
         FROM #pago_Num
         WHERE rn = @i;
 
