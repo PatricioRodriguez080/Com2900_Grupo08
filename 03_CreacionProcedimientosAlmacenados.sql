@@ -9,7 +9,7 @@ Integrantes:
     - Rodriguez Arrien, Juan Manuel (44259478)
     - Rodriguez, Patricio (45683229)
     - Ruiz, Leonel Emiliano (45537914)
-Enunciado:        "03 - Creación de Procedimientos Almacenados"
+Enunciado:        "04 - Creación de Procedimientos Almacenados"
 ===============================================================================
 */
 
@@ -410,208 +410,144 @@ CREATE OR ALTER PROCEDURE consorcio.SP_importar_personas
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    -- Variables para la carga masiva (BULK INSERT)
-    DECLARE @sqlBulkInsert NVARCHAR(MAX);
-    
-    -- Variables para el manejo de errores
-    DECLARE @ErrorMessage NVARCHAR(4000);
-    DECLARE @ErrorSeverity INT;
-    DECLARE @ErrorState INT;
-    
-    -- Iniciar la transacción para asegurar atomicidad (todo o nada)
-    BEGIN TRANSACTION
-    
-    BEGIN TRY
-        
-        --------------------------------------------------
-        -- 1. CREAR TABLA TEMPORAL
-        --------------------------------------------------
-        -- Asegurar limpieza de tabla temporal
-        IF OBJECT_ID('tempdb..#temporal') IS NOT NULL
-            DROP TABLE #temporal;
-            
-        CREATE TABLE #temporal (
-            Col1_Nombre         VARCHAR(100),
-            Col2_Apellido       VARCHAR(100),
-            Col3_DNI            VARCHAR(50),
-            Col4_Email          VARCHAR(100),
-            Col5_Telefono       VARCHAR(50),
-            Col6_CuentaOrigen   CHAR(22),
-            Col7_Inquilino      DECIMAL(2, 0) -- 1 = inquilino, 0 = propietario
+
+    -------------------------------------------------------------------------
+    -- 1. Crear tabla staging
+    -------------------------------------------------------------------------
+    IF OBJECT_ID('tempdb..#personas_CSV', 'U') IS NOT NULL
+        DROP TABLE #personas_CSV;
+
+    CREATE TABLE #personas_CSV (
+        stg_nombre       NVARCHAR(100),
+        stg_apellido     NVARCHAR(100),
+        stg_dni          NVARCHAR(50),
+        stg_email        NVARCHAR(100),
+        stg_telefono     NVARCHAR(50),
+        stg_cuentaOrigen NVARCHAR(22),
+        stg_inquilino    NVARCHAR(2) -- 1=inquilino, 0=propietario
+    );
+
+    -------------------------------------------------------------------------
+    -- 2. Cargar archivo CSV con BULK INSERT
+    -------------------------------------------------------------------------
+    DECLARE @sql NVARCHAR(MAX);
+    SET @sql = N'
+        BULK INSERT #personas_CSV
+        FROM ''' + @path + '''
+        WITH
+        (
+            FIELDTERMINATOR = '';'',
+            ROWTERMINATOR = ''0x0A'',
+            CODEPAGE = ''1252'',
+            FIRSTROW = 2
         );
-        
-        --------------------------------------------------
-        -- 2. CARGAR CSV (Bloque dinámico - BULK INSERT)
-        --------------------------------------------------
-        SET @sqlBulkInsert = '
-            BULK INSERT #temporal
-            FROM ''' + @path + '''
-            WITH (
-                FIELDTERMINATOR = '';'',
-                ROWTERMINATOR = ''0x0A'', -- Línea nueva LF (Unix/Linux) o 0x0D0A para CR+LF (Windows)
-                FIRSTROW = 2,
-                CODEPAGE = ''1252'' -- Codificación para caracteres especiales como ñ, ó, é.
-            );
-        ';
-        
-        EXEC sp_executesql @sqlBulkInsert;
+    ';
+    EXEC sp_executesql @sql;
 
-        --------------------------------------------------
-        -- 3. INSERTAR NUEVAS PERSONAS en consorcio.persona (Basado en Conjuntos)
-        --------------------------------------------------
-        WITH DatosLimpios AS (
-            SELECT  
-                -- Lógica compleja de Title Case y limpieza de caracteres especiales (si es necesario mantenerla)
-                RTRIM(
-                    (
-                        SELECT  
-                            UPPER(LEFT(value, 1)) + LOWER(SUBSTRING(value, 2, LEN(value))) + ' '
-                        FROM STRING_SPLIT(
-                            LTRIM(RTRIM(
-                                REPLACE(REPLACE(REPLACE(t.Col1_Nombre, '‚', 'é'), '¥', 'ñ'), '¡', 'í') 
-                            )), ' '
-                        )
-                        FOR XML PATH(''), TYPE
-                    ).value('.', 'NVARCHAR(MAX)')
-                ) AS nombre,
+    -------------------------------------------------------------------------
+    -- 3. Crear tabla numerada con limpieza y casteos
+    -------------------------------------------------------------------------
+    IF OBJECT_ID('tempdb..#personas_Num', 'U') IS NOT NULL
+        DROP TABLE #personas_Num;
 
-                RTRIM(
-                    (
-                        SELECT  
-                            UPPER(LEFT(value, 1)) + LOWER(SUBSTRING(value, 2, LEN(value))) + ' '
-                        FROM STRING_SPLIT(
-                            LTRIM(RTRIM(
-                                REPLACE(REPLACE(REPLACE(t.Col2_Apellido, '‚', 'é'), '¥', 'ñ'), '¡', 'í') 
-                            )), ' '
-                        )
-                        FOR XML PATH(''), TYPE
-                    ).value('.', 'NVARCHAR(MAX)')
-                ) AS apellido,
+    SELECT
+        ROW_NUMBER() OVER (ORDER BY stg_dni) AS rn,
+        -- Limpieza de strings y casteos
+        RTRIM((
+            SELECT UPPER(LEFT(s.value,1)) + LOWER(SUBSTRING(s.value,2,LEN(s.value))) + ' '
+            FROM STRING_SPLIT(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(stg_nombre)), '','é'), '¥','ñ'), '¡','í'), ' ') s
+            FOR XML PATH(''), TYPE
+        ).value('.', 'NVARCHAR(MAX)')) AS nombre,
+        RTRIM((
+            SELECT UPPER(LEFT(s.value,1)) + LOWER(SUBSTRING(s.value,2,LEN(s.value))) + ' '
+            FROM STRING_SPLIT(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(stg_apellido)), '','é'), '¥','ñ'), '¡','í'), ' ') s
+            FOR XML PATH(''), TYPE
+        ).value('.', 'NVARCHAR(MAX)')) AS apellido,
+        CAST(LTRIM(RTRIM(stg_dni)) AS INT) AS dni,
+        LOWER(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(stg_email)), '','é'),'¥','ñ'),'¡','í')) AS email,
+        LTRIM(RTRIM(stg_telefono)) AS telefono,
+        LTRIM(RTRIM(stg_cuentaOrigen)) AS cuentaOrigen,
+        CASE WHEN stg_inquilino = '1' THEN 'inquilino' ELSE 'propietario' END AS rol
+    INTO #personas_Num
+    FROM #personas_CSV
+    WHERE ISNUMERIC(LTRIM(RTRIM(stg_dni))) = 1;
 
-                CAST(LTRIM(RTRIM(t.Col3_DNI)) AS INT) AS dni, -- DNI en entero
+    -------------------------------------------------------------------------
+    -- 4. Iterar y llamar a SPs de ABM
+    -------------------------------------------------------------------------
+    DECLARE @i INT = 1;
+    DECLARE @max INT;
+    DECLARE @idPersona INT;
+    DECLARE @nombre NVARCHAR(100);
+    DECLARE @apellido NVARCHAR(100);
+    DECLARE @dni INT;
+    DECLARE @email NVARCHAR(100);
+    DECLARE @telefono NVARCHAR(50);
+    DECLARE @cuentaOrigen NVARCHAR(22);
+    DECLARE @rol NVARCHAR(15);
+    DECLARE @idUF INT;
 
-                -- Email a minúsculas y limpieza
-                LOWER(
-                    REPLACE(
-                        REPLACE(
-                            REPLACE(
-                                LTRIM(RTRIM(
-                                    REPLACE(REPLACE(REPLACE(t.Col4_Email, '‚', 'é'), '¥', 'ñ'), '¡', 'í') 
-                                )),
-                                ' ', '_'
-                            ),
-                            '__', '_'
-                        ),
-                        '_@', '@'
-                    )
-                ) AS email,
+    SELECT @max = MAX(rn) FROM #personas_Num;
 
-                LTRIM(RTRIM(t.Col5_Telefono)) AS telefono,
-                LTRIM(RTRIM(t.Col6_CuentaOrigen)) AS cuentaOrigen,
-                
-                -- Deduplicación por DNI: elegimos la primera aparición de un DNI
-                ROW_NUMBER() OVER (PARTITION BY t.Col3_DNI ORDER BY (SELECT 1)) as rn 
-            FROM #temporal t
-            WHERE 
-                ISNUMERIC(LTRIM(RTRIM(t.Col3_DNI))) = 1 -- Solo DNI válidos
-                AND LTRIM(RTRIM(t.Col3_DNI)) <> ''
-        )
-        
-        INSERT INTO consorcio.persona (
-            nombre, apellido, dni, email, telefono, cuentaOrigen
-        )
-        SELECT  
-            dl.nombre, dl.apellido, dl.dni, dl.email, dl.telefono, dl.cuentaOrigen
-        FROM DatosLimpios dl
-        WHERE
-            dl.rn = 1 -- Solo el registro principal (deduplicado)
-            AND NOT EXISTS ( -- Evita insertar personas que ya existen por DNI
-                SELECT 1 
-                FROM consorcio.persona p 
-                WHERE p.dni = dl.dni
-            );
-
-        --------------------------------------------------
-        -- 4. INSERTAR RELACIONES en consorcio.persona_unidad_funcional (Basado en Conjuntos)
-        --------------------------------------------------
-        INSERT INTO consorcio.persona_unidad_funcional (idPersona, idUnidadFuncional, rol)
+    WHILE @i <= @max
+    BEGIN
         SELECT
-            p.idPersona,
-            uf.idUnidadFuncional,
-            -- Asignación de rol simple
-            CASE  
-                WHEN t.Col7_Inquilino = 1 THEN 'inquilino'
-                ELSE 'propietario'
-            END AS rol
-        FROM #temporal t         
-        
-        INNER JOIN consorcio.persona p -- Une con la tabla Persona (existente o recién insertada)
-            ON p.dni = CAST(LTRIM(RTRIM(t.Col3_DNI)) AS INT)
-        
-        INNER JOIN consorcio.unidad_funcional uf -- Une con la Unidad Funcional (por cuentaOrigen)
-            ON uf.cuentaOrigen = LTRIM(RTRIM(t.Col6_CuentaOrigen))
-        
-        WHERE 
-            ISNUMERIC(LTRIM(RTRIM(t.Col3_DNI))) = 1 AND LTRIM(RTRIM(t.Col3_DNI)) <> ''
-            
-            AND NOT EXISTS ( -- Evita insertar relaciones ya existentes (misma UF y mismo Rol)
-                SELECT 1 
-                FROM consorcio.persona_unidad_funcional puf
-                WHERE puf.idUnidadFuncional = uf.idUnidadFuncional
-                AND puf.rol = CASE  
-                                  WHEN t.Col7_Inquilino = 1 THEN 'inquilino'
-                                  ELSE 'propietario'
-                              END
-            );
-        
-        --------------------------------------------------
-        -- 5. ÉXITO Y COMMIT
-        --------------------------------------------------
-        COMMIT TRANSACTION
-        
-        -- 6. LIMPIEZA DE TABLA TEMPORAL
-        IF OBJECT_ID('tempdb..#temporal') IS NOT NULL
-            DROP TABLE #temporal;
-            
-        SELECT 'Importación de datos de persona y relaciones completada con éxito. Procesamiento basado en conjuntos.' AS Resultado;
+            @nombre = nombre,
+            @apellido = apellido,
+            @dni = dni,
+            @email = email,
+            @telefono = telefono,
+            @cuentaOrigen = cuentaOrigen,
+            @rol = rol
+        FROM #personas_Num
+        WHERE rn = @i;
 
-    END TRY
-    BEGIN CATCH
-        
-        -- 7. MANEJO DE ERROR Y ROLLBACK
-        
-        -- Si hay una transacción activa, revertir
-        IF @@TRANCOUNT > 0
-            ROLLBACK TRANSACTION;
+        -- Insertar persona
+        BEGIN TRY
+            EXEC consorcio.sp_insertarPersona
+                @nombre = @nombre,
+                @apellido = @apellido,
+                @dni = @dni,
+                @email = @email,
+                @telefono = @telefono,
+                @cuentaOrigen = @cuentaOrigen,
+                @idPersonaCreada = @idPersona OUTPUT;
+        END TRY
+        BEGIN CATCH
+            PRINT 'Error al insertar persona con DNI: ' + CAST(@dni AS VARCHAR);
+        END CATCH
 
-        -- Capturar la información del error
-        SELECT  
-            @ErrorMessage = ERROR_MESSAGE(), 
-            @ErrorSeverity = ERROR_SEVERITY(), 
-            @ErrorState = ERROR_STATE();
+        -- Asignar persona a UF
+        SELECT @idUF = idUnidadFuncional
+        FROM consorcio.unidad_funcional
+        WHERE cuentaOrigen = @cuentaOrigen AND fechaBaja IS NULL;
 
-        -- 8. LIMPIEZA DE TABLA TEMPORAL EN CASO DE ERROR
-        IF OBJECT_ID('tempdb..#temporal') IS NOT NULL
-            DROP TABLE #temporal;
-            
-        SELECT
-            'Error al importar los datos. La tabla temporal fue limpiada y la transacción revertida.' AS Resultado,
-            ERROR_NUMBER() AS ErrorNumber,
-            @ErrorMessage AS ErrorMessage,
-            ERROR_LINE() AS ErrorLine;
+        IF @idUF IS NOT NULL
+        BEGIN
+            BEGIN TRY
+                EXEC consorcio.sp_insertarPersonaUF
+                    @idPersona = @idPersona,
+                    @idUnidadFuncional = @idUF,
+                    @rol = @rol;
+            END TRY
+            BEGIN CATCH
+                PRINT 'Error al asignar persona a UF: ' + CAST(@idPersona AS VARCHAR) + ' -> ' + CAST(@idUF AS VARCHAR);
+            END CATCH
+        END
+        ELSE
+        BEGIN
+            PRINT 'No se encontró UF para cuentaOrigen: ' + @cuentaOrigen;
+        END
 
-        -- Re-lanzar el error para que la aplicación lo capture
-        THROW; 
-        
-        -- Devolver un código de error
-        RETURN 1;
+        SET @i = @i + 1;
+    END
 
-    END CATCH
-    
-    -- Devolver un código de éxito al final del procedimiento
-    RETURN 0;
-END
+    -------------------------------------------------------------------------
+    -- 5. Limpiar staging
+    -------------------------------------------------------------------------
+    DROP TABLE #personas_Num;
+    DROP TABLE #personas_CSV;
+END;
 GO
 
 
@@ -712,11 +648,6 @@ BEGIN
 END
 GO
 
---------------------------------------------------------------------------------
--- NUMERO: 6
--- ARCHIVO: Servicios.Servicios.json
--- PROCEDIMIENTO: Importar expensas y gastos
---------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
 -- NUMERO: 6
 -- ARCHIVO: Servicios.Servicios.json
@@ -912,7 +843,7 @@ BEGIN
                         SET @nroFactura += 1; SET @subtotal += @importe;
                     END
 
-                    -- Actualizar gasto padre con subtotal.
+                    -- Actualizar gasto padre con subtotal
                     EXEC consorcio.sp_modificarGasto @idGasto, @subtotal, NULL;
 
                 END
@@ -1017,6 +948,9 @@ BEGIN
     BEGIN TRY
         BEGIN TRANSACTION;
 
+        -------------------------------------------------------------------------
+        -- 1. Crear tabla temporal de staging
+        -------------------------------------------------------------------------
         IF OBJECT_ID('tempdb..#stg_gastosProcesados') IS NOT NULL
             DROP TABLE #stg_gastosProcesados;
 
@@ -1324,133 +1258,4 @@ BEGIN
         RAISERROR('Error en SP_cargar_estado_financiero: %s', 16, 1, @ErrorMessage);
     END CATCH;
 END;
-GO
-
-USE Com2900G08;
-GO
-
-USE Com2900G08;
-GO
-
---------------------------------------------------------------------------------
--- PROCEDIMIENTO: SP_MigrarEsquemaACifradoReversible_Seguro
--- DESCRIPCIÓN: Migra de forma segura los datos existentes a VARBINARY(256)
---              aplicando ENCRYPTBYPASSPHRASE. Usa EXECUTE DYNAMIC para evitar 
---              el error de columna no encontrada después de ALTER TABLE.
---------------------------------------------------------------------------------
-USE Com2900G08;
-GO
-
---------------------------------------------------------------------------------
--- PROCEDIMIENTO: SP_MigrarEsquemaACifradoReversible_Seguro
--- DESCRIPCIÓN: Migra de forma segura los datos existentes a VARBINARY(256)
---              (CORREGIDO: Elimina dependencias faltantes en tiempo de ejecución)
---------------------------------------------------------------------------------
-USE Com2900G08;
-GO
-
---------------------------------------------------------------------------------
--- PROCEDIMIENTO: SP_MigrarEsquemaACifradoReversible_Seguro
--- DESCRIPCIÓN: Migra de forma segura los datos existentes a VARBINARY(256)
---              (CORREGIDO: Resuelve la ambigüedad 'name' en la búsqueda de constraints)
---------------------------------------------------------------------------------
-CREATE OR ALTER PROCEDURE consorcio.SP_MigrarEsquemaACifradoReversible_Seguro
-    @FraseClave NVARCHAR(128)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    DECLARE @SQL NVARCHAR(MAX);
-    DECLARE @ConstraintName NVARCHAR(128);
-
-    ALTER TABLE consorcio.persona DROP CONSTRAINT IF EXISTS chk_persona_cuentaOrigen;
-    ALTER TABLE consorcio.unidad_funcional DROP CONSTRAINT IF EXISTS chk_unidadFuncional_cuentaOrigen;
-    ALTER TABLE consorcio.pago DROP CONSTRAINT IF EXISTS chk_pago_cuentaOrigen;
-
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'dni_hash_unicidad' AND Object_ID = Object_ID(N'consorcio.persona'))
-        ALTER TABLE consorcio.persona ADD dni_hash_unicidad VARBINARY(64) NULL;
-        
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'dni_temp' AND Object_ID = Object_ID(N'consorcio.persona'))
-        ALTER TABLE consorcio.persona ADD dni_temp VARBINARY(256) NULL;
-        
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'email_temp' AND Object_ID = Object_ID(N'consorcio.persona'))
-        ALTER TABLE consorcio.persona ADD email_temp VARBINARY(256) NULL;
-        
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'telefono_temp' AND Object_ID = Object_ID(N'consorcio.persona'))
-        ALTER TABLE consorcio.persona ADD telefono_temp VARBINARY(256) NULL;
-        
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'cuentaOrigen_temp' AND Object_ID = Object_ID(N'consorcio.persona'))
-        ALTER TABLE consorcio.persona ADD cuentaOrigen_temp VARBINARY(256) NULL;
-
-    SET @SQL = N'
-    UPDATE consorcio.persona
-    SET 
-        dni_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(dni AS VARCHAR), 1, CONVERT(VARBINARY, idPersona)),
-        email_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(email AS VARCHAR(100)), 1, CONVERT(VARBINARY, idPersona)),
-        telefono_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(telefono AS VARCHAR(20)), 1, CONVERT(VARBINARY, idPersona)),
-        cuentaOrigen_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(cuentaOrigen AS CHAR(22)), 1, CONVERT(VARBINARY, idPersona)),
-        dni_hash_unicidad = HASHBYTES(''SHA2_256'', CAST(dni AS VARCHAR));
-    ';
-    EXEC sp_executesql @SQL, N'@FraseClaveParam NVARCHAR(128)', @FraseClaveParam = @FraseClave;
-
-    SELECT @ConstraintName = NULL; -- Reiniciar
-    
-    SELECT TOP 1 @ConstraintName = kc.name 
-    FROM sys.key_constraints kc
-    INNER JOIN sys.index_columns ic ON kc.parent_object_id = ic.object_id AND kc.unique_index_id = ic.index_id
-    INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
-    WHERE kc.parent_object_id = OBJECT_ID('consorcio.persona') 
-      AND kc.type IN ('UQ', 'PK') 
-      AND c.name = 'dni';
-
-    IF @ConstraintName IS NOT NULL
-    BEGIN
-        SET @SQL = N'ALTER TABLE consorcio.persona DROP CONSTRAINT ' + QUOTENAME(@ConstraintName);
-        EXEC sp_executesql @SQL;
-        PRINT 'Restricción dependiente (' + @ConstraintName + ') eliminada.';
-    END
-    
-    ALTER TABLE consorcio.persona DROP COLUMN dni;
-    ALTER TABLE consorcio.persona DROP COLUMN email;
-    ALTER TABLE consorcio.persona DROP COLUMN telefono;
-    ALTER TABLE consorcio.persona DROP COLUMN cuentaOrigen;
-
-    EXEC sp_rename 'consorcio.persona.dni_temp', 'dni', 'COLUMN';
-    EXEC sp_rename 'consorcio.persona.email_temp', 'email', 'COLUMN';
-    EXEC sp_rename 'consorcio.persona.telefono_temp', 'telefono', 'COLUMN';
-    EXEC sp_rename 'consorcio.persona.cuentaOrigen_temp', 'cuentaOrigen', 'COLUMN';
-
-    ALTER TABLE consorcio.persona ALTER COLUMN dni VARBINARY(256) NOT NULL;
-    ALTER TABLE consorcio.persona ALTER COLUMN cuentaOrigen VARBINARY(256) NOT NULL;
-    
-    ALTER TABLE consorcio.persona ADD CONSTRAINT UQ_persona_dni_hash UNIQUE (dni_hash_unicidad);
-
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'cuentaOrigen_temp' AND Object_ID = Object_ID(N'consorcio.unidad_funcional'))
-        ALTER TABLE consorcio.unidad_funcional ADD cuentaOrigen_temp VARBINARY(256) NULL;
-    
-    SET @SQL = N'
-    UPDATE consorcio.unidad_funcional
-    SET cuentaOrigen_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(cuentaOrigen AS CHAR(22)), 1, CONVERT(VARBINARY, idUnidadFuncional));
-    ';
-    EXEC sp_executesql @SQL, N'@FraseClaveParam NVARCHAR(128)', @FraseClaveParam = @FraseClave;
-
-    ALTER TABLE consorcio.unidad_funcional DROP COLUMN cuentaOrigen;
-    EXEC sp_rename 'consorcio.unidad_funcional.cuentaOrigen_temp', 'cuentaOrigen', 'COLUMN';
-    ALTER TABLE consorcio.unidad_funcional ALTER COLUMN cuentaOrigen VARBINARY(256) NOT NULL;
-
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'cuentaOrigen_temp' AND Object_ID = Object_ID(N'consorcio.pago'))
-        ALTER TABLE consorcio.pago ADD cuentaOrigen_temp VARBINARY(256) NULL;
-    
-    SET @SQL = N'
-    UPDATE consorcio.pago
-    SET cuentaOrigen_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(cuentaOrigen AS CHAR(22)), 1, CONVERT(VARBINARY, idPago));
-    ';
-    EXEC sp_executesql @SQL, N'@FraseClaveParam NVARCHAR(128)', @FraseClaveParam = @FraseClave;
-
-    ALTER TABLE consorcio.pago DROP COLUMN cuentaOrigen;
-    EXEC sp_rename 'consorcio.pago.cuentaOrigen_temp', 'cuentaOrigen', 'COLUMN';
-    ALTER TABLE consorcio.pago ALTER COLUMN cuentaOrigen VARBINARY(256) NOT NULL;
-
-    PRINT 'Migración de esquema a cifrado reversible COMPLETADA. Los datos existentes fueron cifrados con éxito.';
-END
 GO
