@@ -1,5 +1,5 @@
 /*
-===============================================================================
+================================================================================
 Materia:          Bases de Datos Aplicadas
 Comisión:         01-2900
 Grupo:            G08
@@ -10,9 +10,9 @@ Integrantes:
     - Rodriguez, Patricio (45683229)
     - Ruiz, Leonel Emiliano (45537914)
 Enunciado:        "04 - Ejecución de Procedimientos Almacenados"
-===============================================================================
+================================================================================
 */
-
+-- Todos los archivos utilizados se encontrarán en "C:\Archivos para el TP" ----
 --------------------------------------------------------------------------------
 -- NUMERO: 1
 -- ARCHIVO: datos varios.xlsx
@@ -130,3 +130,11 @@ SELECT * FROM consorcio.estado_financiero;
 EXEC consorcio.SP_MigrarEsquemaACifradoReversible_Seguro 
     @FraseClave = 'Migradoantihackers';
 GO
+
+--------------------------------------------------------------------------------
+-- NUMERO: 11
+-- ARCHIVO: -
+-- PROCEDIMIENTO: Modificacion de tablas para descifrado de datos sensibles
+--------------------------------------------------------------------------------
+EXEC consorcio.SP_RevertirEsquemaADatosClaros_Seguro 
+    @FraseClave = 'Migradoantihackers';
