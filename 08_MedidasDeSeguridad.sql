@@ -44,7 +44,7 @@ GRANT SELECT ON consorcio.expensa TO [Administrativo operativo];
 GRANT SELECT ON consorcio.detalle_expensa TO [Administrativo operativo];
 GO
 
--- Rol: Sistemas (Solo Generación de reportes) --
+-- 4. Rol: Sistemas (Solo Generación de reportes) --
 GRANT SELECT ON consorcio.expensa TO [Sistemas];
 GRANT SELECT ON consorcio.detalle_expensa TO [Sistemas];
 GO
@@ -120,10 +120,8 @@ CREATE USER user_bruno_sys FOR LOGIN login_bruno_sys;
 ALTER ROLE [Sistemas] ADD MEMBER user_bruno_sys;
 GO
 
-USE Com2900G08;
-GO
-
-/* SELECT 
+-------- VER USUARIOS CREADOS ------------------
+ SELECT 
     name AS NombreUsuario,
     type_desc AS Tipo,
     create_date AS FechaCreacion,
@@ -134,26 +132,16 @@ FROM
 WHERE 
     type IN ('S', 'U', 'G')
     AND name NOT IN ('public', 'guest', 'INFORMATION_SCHEMA', 'sys', 'dbo');
-GO */
+GO 
 
 
-USE master;
-GO
-
--- 1. Habilitar el modo de autenticación de SQL Server y Windows
+--  Habilitar el modo de autenticación Mixto de SQL Server y Windows
 EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', 
     N'Software\Microsoft\MSSQLServer\MSSQLServer', 
     N'LoginMode', REG_DWORD, 2;
 GO
 
-SELECT 'El modo de autenticación ha sido cambiado. Se requiere reiniciar el servicio.';
-
-USE Com2900G08;
-GO
-
-USE Com2900G08;
-GO
-
+----- VER NOMBRE DEL ROL ACTUAL ---------------
 SELECT 
     dp.name AS Nombre_del_Rol
 FROM 
@@ -166,3 +154,100 @@ WHERE
     -- USER_NAME() devuelve el nombre de tu usuario actual en la base de datos
     mp.name = USER_NAME(); 
 GO
+
+USE Com2900G08;
+GO
+
+----------------------------------------------------------------------------------
+-- PRUEBAS CON USUARIOS
+----------------------------------------------------------------------------------
+-- Administrativo general ---
+-- PRUEBA DE ÉXITO: SELECT en Reportes (expensa)
+-- Resultado Esperado: Muestra datos.
+SELECT TOP 1 periodo, anio, idConsorcio FROM consorcio.expensa;
+GO
+
+-- PRUEBA DE ÉXITO: UPDATE en Actualización UF (unidad_funcional)
+-- Resultado Esperado: Ejecución Exitosa. (Usamos una transacción para revertir el cambio).
+BEGIN TRANSACTION;
+    UPDATE consorcio.unidad_funcional 
+    SET coeficiente = 0.50 
+    WHERE idUnidadFuncional = 1;
+    -- Se verá una fila afectada, pero se revierte.
+ROLLBACK TRANSACTION;
+GO
+
+-- PRUEBA DE FALLO: INSERT en Pagos (pago)
+-- Resultado Esperado: ERROR (Msg 229: The INSERT permission was denied...)
+INSERT INTO consorcio.pago (idPago, fecha, cuentaOrigen, importe, estaAsociado) 
+VALUES (999999, GETDATE(), '1234567890123456789012', 100.00, 0);
+GO
+
+
+-- Administrativo Bancario ---
+-- PRUEBA DE ÉXITO: INSERT en Pagos (pago)
+-- Resultado Esperado: Ejecución Exitosa (Inserta una fila).
+INSERT INTO consorcio.pago (idPago, fecha, cuentaOrigen, importe, estaAsociado) 
+VALUES (999998, GETDATE(), '1234567890123456789012', 25000.00, 0);
+GO
+
+-- PRUEBA DE ÉXITO: SELECT en Reportes (detalle_expensa)
+-- Resultado Esperado: Muestra datos.
+SELECT TOP 1 * FROM consorcio.detalle_expensa;
+GO
+
+-- PRUEBA DE FALLO: UPDATE en Actualización UF (unidad_funcional)
+-- Resultado Esperado: ERROR (Msg 229: The UPDATE permission was denied...)
+BEGIN TRANSACTION;
+    UPDATE consorcio.unidad_funcional 
+    SET coeficiente = 0.10 
+    WHERE idUnidadFuncional = 1;
+ROLLBACK TRANSACTION;
+GO
+
+
+-- Administrativo operativo ---
+-- PRUEBA DE ÉXITO: SELECT en Reportes (expensa)
+-- Resultado Esperado: Muestra datos.
+SELECT TOP 1 periodo, anio, idConsorcio FROM consorcio.expensa;
+GO
+
+-- PRUEBA DE ÉXITO: UPDATE en Actualización UF (unidad_funcional)
+-- Resultado Esperado: Ejecución Exitosa. (Usamos una transacción para revertir el cambio).
+BEGIN TRANSACTION;
+    UPDATE consorcio.unidad_funcional 
+    SET coeficiente = 0.45 
+    WHERE idUnidadFuncional = 1;
+    -- Se verá una fila afectada, pero se revierte.
+ROLLBACK TRANSACTION;
+GO
+
+-- PRUEBA DE FALLO: INSERT en Pagos (pago)
+-- Resultado Esperado: ERROR (Msg 229: The INSERT permission was denied...)
+INSERT INTO consorcio.pago (idPago, fecha, cuentaOrigen, importe, estaAsociado) 
+VALUES (999996, GETDATE(), '1234567890123456789012', 500.00, 0);
+GO
+
+
+-- Sistemas ---
+
+-- PRUEBA DE ÉXITO: SELECT en Reportes (expensa)
+-- Resultado Esperado: Muestra datos.
+SELECT TOP 1 * FROM consorcio.expensa;
+GO
+
+-- PRUEBA DE FALLO: INSERT en Pagos (pago)
+-- Resultado Esperado: ERROR (Msg 229: The INSERT permission was denied...)
+INSERT INTO consorcio.pago (idPago, fecha, cuentaOrigen, importe, estaAsociado) 
+VALUES (999997, GETDATE(), '1234567890123456789012', 500.00, 0);
+GO
+
+-- PRUEBA DE FALLO: UPDATE en Actualización UF (unidad_funcional)
+-- Resultado Esperado: ERROR (Msg 229: The UPDATE permission was denied...)
+BEGIN TRANSACTION;
+    UPDATE consorcio.unidad_funcional 
+    SET coeficiente = 0.99 
+    WHERE idUnidadFuncional = 1;
+ROLLBACK TRANSACTION;
+GO
+
