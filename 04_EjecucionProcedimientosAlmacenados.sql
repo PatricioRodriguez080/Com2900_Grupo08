@@ -102,6 +102,17 @@ EXEC consorcio.sp_procesa_actualizacion_gastos;
 
 SELECT * FROM consorcio.gasto_ordinario;
 
+SELECT 
+    go.*, 
+    e.idConsorcio  -- El campo clave para la depuración
+FROM 
+    consorcio.gasto_ordinario AS go
+INNER JOIN 
+    consorcio.gasto AS g ON go.idGasto = g.idGasto
+INNER JOIN 
+    consorcio.expensa AS e ON g.idExpensa = e.idExpensa
+ORDER BY 
+    go.idGastoOrd;
 --------------------------------------------------------------------------------
 -- NUMERO: 9
 -- ARCHIVO: -
