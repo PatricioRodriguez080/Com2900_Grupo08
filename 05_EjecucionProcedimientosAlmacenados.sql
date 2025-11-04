@@ -104,7 +104,7 @@ SELECT * FROM consorcio.gasto_ordinario;
 
 SELECT 
     go.*, 
-    e.idConsorcio  -- El campo clave para la depuración
+    e.idConsorcio
 FROM 
     consorcio.gasto_ordinario AS go
 INNER JOIN 
@@ -127,7 +127,7 @@ SELECT * FROM consorcio.estado_financiero;
 -- ARCHIVO: -
 -- PROCEDIMIENTO: Modificacion de tablas para cifrado de datos sensibles
 --------------------------------------------------------------------------------
-EXEC consorcio.SP_MigrarEsquemaACifradoReversible_Seguro 
+EXEC consorcio.SP_migrarEsquemaACifradoReversible 
     @FraseClave = 'Migradoantihackers';
 GO
 
@@ -136,5 +136,5 @@ GO
 -- ARCHIVO: -
 -- PROCEDIMIENTO: Modificacion de tablas para descifrado de datos sensibles
 --------------------------------------------------------------------------------
-EXEC consorcio.SP_RevertirEsquemaADatosClaros_Seguro 
+EXEC consorcio.SP_revertirEsquemaADatosClaros
     @FraseClave = 'Migradoantihackers';
