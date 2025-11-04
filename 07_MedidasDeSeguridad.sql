@@ -134,5 +134,35 @@ FROM
 WHERE 
     type IN ('S', 'U', 'G')
     AND name NOT IN ('public', 'guest', 'INFORMATION_SCHEMA', 'sys', 'dbo');
+GO */
+
+
+USE master;
 GO
-/*
+
+-- 1. Habilitar el modo de autenticación de SQL Server y Windows
+EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', 
+    N'Software\Microsoft\MSSQLServer\MSSQLServer', 
+    N'LoginMode', REG_DWORD, 2;
+GO
+
+SELECT 'El modo de autenticación ha sido cambiado. Se requiere reiniciar el servicio.';
+
+USE Com2900G08;
+GO
+
+USE Com2900G08;
+GO
+
+SELECT 
+    dp.name AS Nombre_del_Rol
+FROM 
+    sys.database_role_members AS drm
+INNER JOIN 
+    sys.database_principals AS dp ON drm.role_principal_id = dp.principal_id
+INNER JOIN 
+    sys.database_principals AS mp ON drm.member_principal_id = mp.principal_id
+WHERE 
+    -- USER_NAME() devuelve el nombre de tu usuario actual en la base de datos
+    mp.name = USER_NAME(); 
+GO
