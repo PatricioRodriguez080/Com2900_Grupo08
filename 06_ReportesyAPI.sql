@@ -276,7 +276,7 @@ GO
 -- Obtenga los 3 (tres) propietarios con mayor morosidad. Presente información de contacto y DNI de los propietarios 
 -- para que la administración los pueda contactar o remitir el trámite al estudio jurídico.
 --------------------------------------------------------------------------------
-CREATE OR ALTER PROCEDURE consorcio.SP_obtener_propietarios_deudas
+CREATE OR ALTER PROCEDURE consorcio.SP_reporte_5
 AS
 BEGIN
     SELECT TOP 3
@@ -308,5 +308,4 @@ BEGIN
 END
 GO
 
-
-EXEC consorcio.SP_obtener_propietarios_deudas;
+EXEC consorcio.SP_reporte_5;
