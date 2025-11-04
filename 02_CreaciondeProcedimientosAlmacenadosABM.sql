@@ -2292,7 +2292,7 @@ BEGIN
     END
     
     -- validamos el tipo de gasto
-    IF LOWER(@tipoGasto) NOT IN ('mantenimiento','limpieza','administracion','seguros','generales','servicios publicos')
+    IF LOWER(@tipoGasto) NOT IN ('bancario','limpieza','administracion','seguros','generales','servicios publicos')
     BEGIN
         RAISERROR('Error: El tipo de gasto no es valido. Consulte la lista de tipos permitidos.', 16, 1);
         RETURN -5;

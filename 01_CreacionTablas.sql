@@ -197,7 +197,7 @@ CREATE TABLE consorcio.gasto_ordinario (
     importe DECIMAL(12,2) NOT NULL,
 
     CONSTRAINT pk_gastoOrd PRIMARY KEY (idGastoOrd),
-    CONSTRAINT chk_tipoGasto_ord CHECK (tipoGasto IN ('mantenimiento','limpieza','administracion','seguros','generales','servicios publicos')),
+    CONSTRAINT chk_tipoGasto_ord CHECK (tipoGasto IN ('bancario','limpieza','administracion','seguros','generales','servicios publicos')),
     CONSTRAINT chk_importe_ord CHECK (importe > 0),
     CONSTRAINT uq_factura_ord UNIQUE (nroFactura, nomEmpresa),
     CONSTRAINT fk_gastoOrd_gasto FOREIGN KEY (idGasto) REFERENCES consorcio.gasto(idGasto)

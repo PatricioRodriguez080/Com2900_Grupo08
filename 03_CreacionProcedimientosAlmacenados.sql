@@ -807,7 +807,7 @@ BEGIN
                     IF @importe IS NOT NULL AND @importe > 0
                     BEGIN
                         SET @subTipo = ''; SET @nomEmpresa = '-';
-                        EXEC consorcio.sp_insertarGastoOrdinario @idGasto, 'mantenimiento', @subTipo, @nomEmpresa, @nroFactura, @importe, @idGastoOrdCreado OUTPUT;
+                        EXEC consorcio.sp_insertarGastoOrdinario @idGasto, 'bancario', @subTipo, @nomEmpresa, @nroFactura, @importe, @idGastoOrdCreado OUTPUT;
                         SET @nroFactura += 1; SET @subtotal += @importe;
                     END
 
@@ -1009,91 +1009,71 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    IF OBJECT_ID('tempdb..#stg_gastosProcesados') IS NOT NULL DROP TABLE #stg_gastosProcesados;
+
     BEGIN TRY
         BEGIN TRANSACTION;
 
-        -------------------------------------------------------------------------
-        -- 1. Crear tabla temporal de staging (Preparación de datos)
-        -------------------------------------------------------------------------
-        -- Usamos IF EXISTS y DROP en una sola línea para ser directos
-        IF OBJECT_ID('tempdb..#stg_gastosProcesados') IS NOT NULL DROP TABLE #stg_gastosProcesados;
-
+        -- 1. Crear tabla temporal de staging con los cálculos de actualización
         SELECT 
             go.idGastoOrd,
             
-            -- Calculamos el nuevo subTipoGasto.
+            -- Cálculo de subTipoGasto_nuevo
             CASE 
-
-                -- 2. Extracción de Subtipo (Si el nombre tiene el formato 'EMPRESA - SUBTIPO')
+                -- PRIORIDAD 1: Extracción del subtipo si el proveedor tiene ' - '
                 WHEN CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
                     TRIM(SUBSTRING(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) + 3, LEN(p.nomEmpresa)))
-                
-                -- 3. Mapeo Simple (Valores por defecto para tipos comunes)
-                WHEN go.tipoGasto = 'administracion' THEN 'Honorarios'
-                WHEN go.tipoGasto = 'limpieza' THEN 'Servicio General'
-                WHEN go.tipoGasto = 'generales' THEN 'Varios'
-                
-                -- 4. Si nada coincide, se usará el valor actual de la tabla (manejo en el UPDATE)
+                -- PRIORIDAD 2: Mapeo Simple
+                WHEN LOWER(go.tipoGasto) = 'administracion' THEN 'Honorarios'
+                WHEN LOWER(go.tipoGasto) = 'limpieza' THEN 'Servicio General'
+                WHEN LOWER(go.tipoGasto) = 'generales' THEN 'Varios'
                 ELSE NULL 
             END AS subTipoGasto_nuevo,
             
-            -- Calculamos el nuevo nomEmpresa
+            -- Calculo de nomEmpresa_nuevo
             CASE 
-                -- Extraemos el nombre antes del ' - '
-                WHEN CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
-                    TRIM(LEFT(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) - 1))
-                -- Si no tiene ' - ', usamos el nombre completo
+                -- PRIORIDAD 1: Fragmentación del proveedor (toma el nombre antes del ' - ')
+                WHEN p.nomEmpresa IS NOT NULL AND CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
+                    CAST(TRIM(LEFT(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) - 1)) AS VARCHAR(40))
+                -- PRIORIDAD 2: Uso del nombre completo del proveedor (si existe)
+                WHEN p.nomEmpresa IS NOT NULL THEN
+                    CAST(TRIM(p.nomEmpresa) AS VARCHAR(40))
+                -- PRIORIDAD 3: RESCATE para 'administracion'
+                WHEN LOWER(go.tipoGasto) = 'administracion' THEN 
+                    CAST(go.nomEmpresa AS VARCHAR(40)) 
                 ELSE
-                    TRIM(p.nomEmpresa)
+                    NULL
             END AS nomEmpresa_nuevo
             
         INTO #stg_gastosProcesados
         FROM consorcio.gasto_ordinario AS go
-        JOIN consorcio.gasto AS g ON go.idGasto = g.idGasto
-        JOIN consorcio.expensa AS e ON g.idExpensa = e.idExpensa
-        -- Usamos LEFT JOIN para asegurarnos de que el gasto se procese AUN si no hay proveedor asociado
+        INNER JOIN consorcio.gasto AS g ON go.idGasto = g.idGasto
+        INNER JOIN consorcio.expensa AS e ON g.idExpensa = e.idExpensa
         LEFT JOIN consorcio.proveedor AS p
             ON e.idConsorcio = p.idConsorcio
-            -- La condición de mapeo entre el Gasto y el Proveedor
-            AND UPPER(p.tipoGasto) LIKE '%' + UPPER(go.tipoGasto) + '%'; 
-
-        -------------------------------------------------------------------------
-        -- 2. Aplicar la actualización de datos (Actualización basada en conjuntos)
-        -------------------------------------------------------------------------
+            AND UPPER(TRIM(p.tipoGasto)) LIKE '%' + UPPER(TRIM(go.tipoGasto)) + '%';
+        
+        -- 2. Aplicar la actualización de datos
         UPDATE go
         SET 
-            -- Si el valor nuevo es NULL, COALESCE mantiene el valor original de la columna (go.subTipoGasto)
             go.subTipoGasto = COALESCE(stg.subTipoGasto_nuevo, go.subTipoGasto), 
             go.nomEmpresa = COALESCE(stg.nomEmpresa_nuevo, go.nomEmpresa)
             
         FROM consorcio.gasto_ordinario AS go
-        -- Unimos la tabla a actualizar con la tabla temporal de datos ya procesados
         INNER JOIN #stg_gastosProcesados AS stg
-            ON go.idGastoOrd = stg.idGastoOrd
-        -- Quitamos el WHERE complejo para ser más simple; se actualizará todo lo que haya cambiado o no.
-        -- Nota: Esto es más simple pero puede actualizar filas innecesariamente.
-        ;
-
-        PRINT CAST(@@ROWCOUNT AS VARCHAR) + ' gastos ordinarios actualizados.';
-
-        -------------------------------------------------------------------------
-        -- 3. Limpieza de tablas temporales
-        -------------------------------------------------------------------------
+            ON go.idGastoOrd = stg.idGastoOrd;
+        
+        -- Limpieza de tablas temporales
         DROP TABLE #stg_gastosProcesados;
 
         COMMIT TRANSACTION;
 
     END TRY
     BEGIN CATCH
-        -- Manejo básico de errores: Rollback y lanzar el error original
+        -- Manejo de errores: deshace todos los cambios
         IF @@TRANCOUNT > 0
             ROLLBACK TRANSACTION;
 
-        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-        DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
-        DECLARE @ErrorState INT = ERROR_STATE();
-
-        RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
         RETURN;
     END CATCH;
 END;
