@@ -680,7 +680,7 @@ BEGIN
             @idPago = CAST(stg_idPago AS INT),
             @fecha = TRY_CONVERT(DATE, stg_fecha, 103),
             @cuentaOrigen = CAST(LTRIM(RTRIM(stg_cvu_cbu)) AS CHAR(22)),
-            @importe = CAST(REPLACE(LTRIM(RTRIM(stg_valor)),'$','') AS DECIMAL(13,3))
+             @importe = CAST(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(stg_valor)),'$',''),'.',''),',','.') AS DECIMAL(13,3))
         FROM #pago_Num
         WHERE rn = @i;
 
@@ -1104,24 +1104,30 @@ BEGIN
                 TRIM(e.periodo) AS periodo,
                 e.anio,
                 SUM(ISNULL(g.subTotalOrdinarios, 0) + ISNULL(g.subTotalExtraOrd, 0)) AS totalEgresos
-            FROM consorcio.expensa AS e
-            LEFT JOIN consorcio.gasto AS g ON e.idExpensa = g.idExpensa
+            FROM consorcio.expensa AS e  LEFT JOIN consorcio.gasto AS g ON e.idExpensa = g.idExpensa
             GROUP BY e.idConsorcio, TRIM(e.periodo), e.anio
         ),
         CteIngresos AS (
             SELECT
                 c.idConsorcio,
                 CASE MONTH(p.fecha)
-                    WHEN 1 THEN 'enero' WHEN 2 THEN 'febrero' WHEN 3 THEN 'marzo'
-                    WHEN 4 THEN 'abril' WHEN 5 THEN 'mayo' WHEN 6 THEN 'junio'
-                    WHEN 7 THEN 'julio' WHEN 8 THEN 'agosto' WHEN 9 THEN 'septiembre'
-                    WHEN 10 THEN 'octubre' WHEN 11 THEN 'noviembre' WHEN 12 THEN 'diciembre'
+                    WHEN 1 THEN 'enero' 
+                    WHEN 2 THEN 'febrero' 
+                    WHEN 3 THEN 'marzo'
+                    WHEN 4 THEN 'abril' 
+                    WHEN 5 THEN 'mayo' 
+                    WHEN 6 THEN 'junio'
+                    WHEN 7 THEN 'julio' 
+                    WHEN 8 THEN 'agosto' 
+                    WHEN 9 THEN 'septiembre'
+                    WHEN 10 THEN 'octubre' 
+                    WHEN 11 THEN 'noviembre' 
+                    WHEN 12 THEN 'diciembre'
                 END AS periodo,
                 YEAR(p.fecha) AS anio,
                 SUM(ISNULL(p.importe, 0)) AS totalIngresos
-            FROM consorcio.pago AS p
-            JOIN consorcio.unidad_funcional AS uf ON p.cuentaOrigen = uf.cuentaOrigen
-            JOIN consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio
+            FROM consorcio.pago AS p JOIN consorcio.unidad_funcional AS uf ON p.cuentaOrigen = uf.cuentaOrigen
+                 JOIN consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio
             WHERE p.fecha IS NOT NULL
             GROUP BY c.idConsorcio, MONTH(p.fecha), YEAR(p.fecha)
         ),
@@ -1134,10 +1140,18 @@ BEGIN
                 CAST(0 AS DECIMAL(12,2)) AS ingresosAdeudados,
                 ISNULL(eg.totalEgresos, 0) AS egresos,
                 CASE eg.periodo
-                    WHEN 'enero' THEN 1 WHEN 'febrero' THEN 2 WHEN 'marzo' THEN 3
-                    WHEN 'abril' THEN 4 WHEN 'mayo' THEN 5 WHEN 'junio' THEN 6
-                    WHEN 'julio' THEN 7 WHEN 'agosto' THEN 8 WHEN 'septiembre' THEN 9
-                    WHEN 'octubre' THEN 10 WHEN 'noviembre' THEN 11 WHEN 'diciembre' THEN 12
+                    WHEN 'enero' THEN 1
+                    WHEN 'febrero' THEN 2
+                    WHEN 'marzo' THEN 3
+                    WHEN 'abril' THEN 4
+                    WHEN 'mayo' THEN 5
+                    WHEN 'junio' THEN 6
+                    WHEN 'julio' THEN 7
+                    WHEN 'agosto' THEN 8
+                    WHEN 'septiembre' THEN 9
+                    WHEN 'octubre' THEN 10
+                    WHEN 'noviembre' THEN 11
+                    WHEN 'diciembre' THEN 12
                 END AS mesNumero
             FROM CteEgresos AS eg
             LEFT JOIN CteIngresos AS i
@@ -1154,20 +1168,19 @@ BEGIN
                 ingresosEnTermino,
                 ingresosAdeudados,
                 egresos,
-                SUM(ingresosEnTermino + ingresosAdeudados - egresos)
-                    OVER (PARTITION BY idConsorcio ORDER BY anio, mesNumero) AS saldoCierre
+                SUM(ingresosEnTermino + ingresosAdeudados - egresos) OVER (PARTITION BY idConsorcio ORDER BY anio, mesNumero) AS saldoCierre
             FROM CteCombinado
         )
         SELECT
             idConsorcio             AS stg_idConsorcio,
-            ISNULL(LAG(saldoCierre, 1, 0)
-                   OVER (PARTITION BY idConsorcio ORDER BY anio, mesNumero), 0) AS stg_saldoAnterior,
+            ISNULL(LAG(saldoCierre, 1, 0) OVER (PARTITION BY idConsorcio ORDER BY anio, mesNumero), 0) AS stg_saldoAnterior,
             ingresosEnTermino       AS stg_ingresosEnTermino,
             ingresosAdeudados       AS stg_ingresosAdeudados,
             egresos                 AS stg_egresos,
             saldoCierre             AS stg_saldoCierre,
             periodo                 AS stg_periodo,
-            anio                    AS stg_anio
+            anio                    AS stg_anio,
+            mesNumero               AS stg_mesNumero
         INTO #stg_estado_financiero
         FROM CteSaldos
         ORDER BY idConsorcio, anio, mesNumero;
@@ -1179,7 +1192,7 @@ BEGIN
             DROP TABLE #stg_estado_financiero_num;
 
         SELECT 
-            ROW_NUMBER() OVER (ORDER BY stg_idConsorcio, stg_anio, stg_periodo) AS rn,
+            ROW_NUMBER() OVER (ORDER BY stg_idConsorcio, stg_anio, stg_mesNumero) AS rn,
             stg_idConsorcio,
             stg_periodo,
             stg_anio,
@@ -1243,9 +1256,6 @@ BEGIN
             SET @i += 1;
         END;
 
-        -------------------------------------------------------------------------
-        -- 5. Limpieza de staging
-        -------------------------------------------------------------------------
         DROP TABLE #stg_estado_financiero_num;
         DROP TABLE #stg_estado_financiero;
 
