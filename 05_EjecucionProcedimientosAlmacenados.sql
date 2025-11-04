@@ -115,6 +115,37 @@ ORDER BY
     go.idGastoOrd;
 
 --------------------------------------------------------------------------------
+-- NUMERO: 9
+-- ARCHIVO: -
+-- PROCEDIMIENTO: Actualizacion de tabla gasto_extraOrdinario
+--------------------------------------------------------------------------------
+
+EXEC consorcio.sp_crearGastosExtraordinariosJunio;
+GO
+
+SELECT
+    E.idExpensa,
+    C.nombre AS Consorcio,
+    E.periodo,
+    GXO.nroCuota,
+    GXO.totalCuotas,
+    GXO.nomEmpresa,
+    GXO.nroFactura,
+    GXO.importe AS ImporteCuota,
+    GXO.descripcion,
+    G.subTotalExtraOrd AS TotalExtraordinarioGasto
+FROM
+    consorcio.gasto_extra_ordinario GXO
+INNER JOIN
+    consorcio.gasto G ON GXO.idGasto = G.idGasto
+INNER JOIN
+    consorcio.expensa E ON G.idExpensa = E.idExpensa
+INNER JOIN
+    consorcio.consorcio C ON E.idConsorcio = C.idConsorcio
+WHERE
+    E.periodo = 'junio' AND E.anio = 2025;
+
+--------------------------------------------------------------------------------
 -- NUMERO: 10
 -- ARCHIVO: -
 -- PROCEDIMIENTO: Generar detalles de expensas de Abril, Mayo y Junio
@@ -123,7 +154,7 @@ ORDER BY
 EXEC consorcio.sp_OrquestarFlujoParaTodosLosConsorcios 
     @periodoExpensa = 'abril', 
     @anioExpensa = 2025,
-    @fechaEmision = '2025-05-01',
+    @fechaEmision = '2025-05-05',
     @fechaPrimerVenc = '2025-05-10',
     @fechaSegundoVenc = '2025-05-25';
 GO
@@ -132,7 +163,7 @@ GO
 EXEC consorcio.sp_OrquestarFlujoParaTodosLosConsorcios 
     @periodoExpensa = 'mayo', 
     @anioExpensa = 2025,
-    @fechaEmision = '2025-06-01',
+    @fechaEmision = '2025-06-05',
     @fechaPrimerVenc = '2025-06-10',
     @fechaSegundoVenc = '2025-06-25';
 GO
@@ -141,7 +172,7 @@ GO
 EXEC consorcio.sp_OrquestarFlujoParaTodosLosConsorcios 
     @periodoExpensa = 'junio', 
     @anioExpensa = 2025,
-    @fechaEmision = '2025-07-01',
+    @fechaEmision = '2025-07-05',
     @fechaPrimerVenc = '2025-07-10',
     @fechaSegundoVenc = '2025-07-25';
 GO
