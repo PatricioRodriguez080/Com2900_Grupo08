@@ -219,6 +219,125 @@ EXEC consorcio.SP_reporte_2
 
 
 --------------------------------------------------------------------------------
+-- REPORTE 3
+-- Presente un cuadro cruzado con la recaudación total desagregada según su procedencia
+-- (ordinario, extraordinario, etc.) según el periodo.
+--------------------------------------------------------------------------------
+
+CREATE OR ALTER PROCEDURE consorcio.sp_Reporte_Crosstab_IngresosPorPeriodo
+    @idConsorcio INT,
+    @Anio INT,
+    @PeriodoInicio VARCHAR(12),
+    @PeriodoFin VARCHAR(12)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- 1. Validar y convertir períodos a números (para filtrar el rango)
+    DECLARE @mesInicio INT = CASE LOWER(LTRIM(RTRIM(@PeriodoInicio)))
+        WHEN 'enero' THEN 1 WHEN 'febrero' THEN 2 WHEN 'marzo' THEN 3 WHEN 'abril' THEN 4
+        WHEN 'mayo' THEN 5 WHEN 'junio' THEN 6 WHEN 'julio' THEN 7 WHEN 'agosto' THEN 8
+        WHEN 'septiembre' THEN 9 WHEN 'octubre' THEN 10 WHEN 'noviembre' THEN 11 WHEN 'diciembre' THEN 12
+        ELSE NULL END;
+    DECLARE @mesFin INT = CASE LOWER(LTRIM(RTRIM(@PeriodoFin)))
+        WHEN 'enero' THEN 1 WHEN 'febrero' THEN 2 WHEN 'marzo' THEN 3 WHEN 'abril' THEN 4
+        WHEN 'mayo' THEN 5 WHEN 'junio' THEN 6 WHEN 'julio' THEN 7 WHEN 'agosto' THEN 8
+        WHEN 'septiembre' THEN 9 WHEN 'octubre' THEN 10 WHEN 'noviembre' THEN 11 WHEN 'diciembre' THEN 12
+        ELSE NULL END;
+
+    IF @mesInicio IS NULL OR @mesFin IS NULL
+    BEGIN
+        RAISERROR('Períodos inválidos.', 16, 1);
+        RETURN -10;
+    END
+    
+    DECLARE @ColumnList NVARCHAR(MAX);
+    
+    WITH PeriodosDistintos AS (
+        SELECT DISTINCT 
+            QUOTENAME(CAST(e.anio AS VARCHAR(4)) + '-' + e.periodo) AS ColumnaPeriodo,
+            -- Necesitamos mantener el orden cronológico
+            CASE LOWER(e.periodo)
+                WHEN 'enero' THEN 1 WHEN 'febrero' THEN 2 WHEN 'marzo' THEN 3 WHEN 'abril' THEN 4
+                WHEN 'mayo' THEN 5 WHEN 'junio' THEN 6 WHEN 'julio' THEN 7 WHEN 'agosto' THEN 8
+                WHEN 'septiembre' THEN 9 WHEN 'octubre' THEN 10 WHEN 'noviembre' THEN 11 WHEN 'diciembre' THEN 12
+            END AS MesOrden
+        FROM consorcio.expensa e
+        WHERE e.idConsorcio = @idConsorcio
+          AND e.anio = @Anio
+          AND CASE LOWER(e.periodo)
+                WHEN 'enero' THEN 1 WHEN 'febrero' THEN 2 WHEN 'marzo' THEN 3 WHEN 'abril' THEN 4
+                WHEN 'mayo' THEN 5 WHEN 'junio' THEN 6 WHEN 'julio' THEN 7 WHEN 'agosto' THEN 8
+                WHEN 'septiembre' THEN 9 WHEN 'octubre' THEN 10 WHEN 'noviembre' THEN 11 WHEN 'diciembre' THEN 12
+              END BETWEEN @mesInicio AND @mesFin
+    )
+    SELECT @ColumnList = STRING_AGG(pd.ColumnaPeriodo, ',') WITHIN GROUP (ORDER BY pd.MesOrden)
+    FROM PeriodosDistintos pd;
+              
+    IF @ColumnList IS NULL
+    BEGIN
+        RAISERROR('No hay datos de expensas para el período seleccionado.', 16, 1);
+        RETURN -11;
+    END
+
+    -- 3. Crear la Consulta Dinámica (PIVOT)
+    DECLARE @SQL NVARCHAR(MAX);
+    SET @SQL = N'
+    -- 1. CTE para obtener y des-pivotear los datos base
+    WITH BaseData AS (
+        SELECT 
+            CAST(e.anio AS VARCHAR(4)) + ''-'' + e.periodo AS Periodo,
+            T.TipoIngreso,
+            T.Importe
+        FROM consorcio.detalle_expensa de
+        JOIN consorcio.expensa e ON de.idExpensa = e.idExpensa
+        -- UNPIVOT: Convertimos columnas (Ordinarias, Extra, Interes) en filas
+        CROSS APPLY (
+            VALUES (''1_ExpensasOrdinarias'', de.expensasOrdinarias),
+                   (''2_ExpensasExtraordinarias'', de.expensasExtraordinarias),
+                   (''3_InteresPorMora'', de.interesPorMora)
+        ) AS T(TipoIngreso, Importe)
+        WHERE 
+            e.idConsorcio = @idConsorcioParam
+            AND e.anio = @anioParam
+            -- Volvemos a aplicar el filtro de mes dentro de la consulta dinámica
+            AND CASE LOWER(e.periodo)
+                  WHEN ''enero'' THEN 1 WHEN ''febrero'' THEN 2 WHEN ''marzo'' THEN 3 WHEN ''abril'' THEN 4
+                  WHEN ''mayo'' THEN 5 WHEN ''junio'' THEN 6 WHEN ''julio'' THEN 7 WHEN ''agosto'' THEN 8
+                  WHEN ''septiembre'' THEN 9 WHEN ''octubre'' THEN 10 WHEN ''noviembre'' THEN 11 WHEN ''diciembre'' THEN 12
+                END BETWEEN @mesInicioParam AND @mesFinParam
+    )
+    -- 2. Pivotar los datos
+    SELECT 
+        TipoIngreso,
+        ' + @ColumnList + '
+    FROM BaseData
+    PIVOT (
+        SUM(Importe) -- Agregamos los importes
+        FOR Periodo IN (' + @ColumnList + ') -- Convertimos los períodos en columnas
+    ) AS PivotTable
+    ORDER BY TipoIngreso;
+    ';
+
+    -- 4. Ejecutar la consulta dinámica pasando los parámetros de forma segura
+    EXEC sp_executesql @SQL,
+        N'@idConsorcioParam INT, @anioParam INT, @mesInicioParam INT, @mesFinParam INT',
+        @idConsorcioParam = @idConsorcio,
+        @anioParam = @Anio,
+        @mesInicioParam = @mesInicio,
+        @mesFinParam = @mesFin;
+
+END;
+GO
+
+EXEC consorcio.sp_Reporte_Crosstab_IngresosPorPeriodo
+    @idConsorcio = 1,
+    @Anio = 2025,
+    @PeriodoInicio = 'abril',
+    @PeriodoFin = 'junio';
+GO
+
+--------------------------------------------------------------------------------
 -- REPORTE 4
 -- Obtener los 5 (cinco) meses de mayores gastos y los 5 (cinco) de mayores ingresos
 --------------------------------------------------------------------------------
