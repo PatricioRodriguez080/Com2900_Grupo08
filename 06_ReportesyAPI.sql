@@ -268,3 +268,45 @@ EXEC consorcio.SP_reporte_4
     @FechaInicio = '2025-04-01',
     @FechaFin = '2025-06-30';
 GO
+
+
+
+--------------------------------------------------------------------------------
+-- REPORTE 5
+-- Obtenga los 3 (tres) propietarios con mayor morosidad. Presente información de contacto y DNI de los propietarios 
+-- para que la administración los pueda contactar o remitir el trámite al estudio jurídico.
+--------------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE consorcio.SP_obtener_propietarios_deudas
+AS
+BEGIN
+    SELECT TOP 3
+        p.nombre,
+        p.apellido,
+        p.dni,
+        p.email,
+        p.telefono,
+        SUM(de.deuda) AS Deuda_Total
+    FROM
+        consorcio.persona p
+    JOIN
+        consorcio.persona_unidad_funcional puf ON p.idPersona = puf.idPersona
+    JOIN
+        consorcio.unidad_funcional uf ON puf.idUnidadFuncional = uf.idUnidadFuncional
+    JOIN
+        consorcio.detalle_expensa de ON uf.idUnidadFuncional = de.idUnidadFuncional
+    WHERE
+        puf.rol = 'propietario'
+    GROUP BY
+        p.idPersona,
+        p.nombre,
+        p.apellido,
+        p.dni,
+        p.email,
+        p.telefono
+    ORDER BY
+        Deuda_Total DESC;
+END
+GO
+
+
+EXEC consorcio.SP_obtener_propietarios_deudas;
