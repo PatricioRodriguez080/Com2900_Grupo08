@@ -224,7 +224,7 @@ EXEC consorcio.SP_reporte_2
 -- (ordinario, extraordinario, etc.) según el periodo.
 --------------------------------------------------------------------------------
 
-CREATE OR ALTER PROCEDURE consorcio.sp_Reporte_Crosstab_IngresosPorPeriodo
+CREATE OR ALTER PROCEDURE consorcio.SP_reporte_3
     @idConsorcio INT,
     @Anio INT,
     @PeriodoInicio VARCHAR(12),
@@ -233,7 +233,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- 1. Validar y convertir períodos a números (para filtrar el rango)
+    -- Validar y convertir periodos a numero
     DECLARE @mesInicio INT = CASE LOWER(LTRIM(RTRIM(@PeriodoInicio)))
         WHEN 'enero' THEN 1 WHEN 'febrero' THEN 2 WHEN 'marzo' THEN 3 WHEN 'abril' THEN 4
         WHEN 'mayo' THEN 5 WHEN 'junio' THEN 6 WHEN 'julio' THEN 7 WHEN 'agosto' THEN 8
@@ -256,7 +256,6 @@ BEGIN
     WITH PeriodosDistintos AS (
         SELECT DISTINCT 
             QUOTENAME(CAST(e.anio AS VARCHAR(4)) + '-' + e.periodo) AS ColumnaPeriodo,
-            -- Necesitamos mantener el orden cronológico
             CASE LOWER(e.periodo)
                 WHEN 'enero' THEN 1 WHEN 'febrero' THEN 2 WHEN 'marzo' THEN 3 WHEN 'abril' THEN 4
                 WHEN 'mayo' THEN 5 WHEN 'junio' THEN 6 WHEN 'julio' THEN 7 WHEN 'agosto' THEN 8
@@ -280,7 +279,7 @@ BEGIN
         RETURN -11;
     END
 
-    -- 3. Crear la Consulta Dinámica (PIVOT)
+    -- Crear la consulta
     DECLARE @SQL NVARCHAR(MAX);
     SET @SQL = N'
     -- 1. CTE para obtener y des-pivotear los datos base
@@ -319,7 +318,7 @@ BEGIN
     ORDER BY TipoIngreso;
     ';
 
-    -- 4. Ejecutar la consulta dinámica pasando los parámetros de forma segura
+    -- ejecutar la consulta
     EXEC sp_executesql @SQL,
         N'@idConsorcioParam INT, @anioParam INT, @mesInicioParam INT, @mesFinParam INT',
         @idConsorcioParam = @idConsorcio,
@@ -330,7 +329,7 @@ BEGIN
 END;
 GO
 
-EXEC consorcio.sp_Reporte_Crosstab_IngresosPorPeriodo
+EXEC consorcio.SP_reporte_3
     @idConsorcio = 1,
     @Anio = 2025,
     @PeriodoInicio = 'abril',
