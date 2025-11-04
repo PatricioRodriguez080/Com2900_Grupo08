@@ -113,8 +113,44 @@ INNER JOIN
     consorcio.expensa AS e ON g.idExpensa = e.idExpensa
 ORDER BY 
     go.idGastoOrd;
+
 --------------------------------------------------------------------------------
--- NUMERO: 9
+-- NUMERO: 10
+-- ARCHIVO: -
+-- PROCEDIMIENTO: Generar detalles de expensas de Abril, Mayo y Junio
+--------------------------------------------------------------------------------
+-- Abril
+EXEC consorcio.sp_OrquestarFlujoParaTodosLosConsorcios 
+    @periodoExpensa = 'abril', 
+    @anioExpensa = 2025,
+    @fechaEmision = '2025-05-01',
+    @fechaPrimerVenc = '2025-05-10',
+    @fechaSegundoVenc = '2025-05-25';
+GO
+
+--Mayo
+EXEC consorcio.sp_OrquestarFlujoParaTodosLosConsorcios 
+    @periodoExpensa = 'mayo', 
+    @anioExpensa = 2025,
+    @fechaEmision = '2025-06-01',
+    @fechaPrimerVenc = '2025-06-10',
+    @fechaSegundoVenc = '2025-06-25';
+GO
+
+--Junio
+EXEC consorcio.sp_OrquestarFlujoParaTodosLosConsorcios 
+    @periodoExpensa = 'junio', 
+    @anioExpensa = 2025,
+    @fechaEmision = '2025-07-01',
+    @fechaPrimerVenc = '2025-07-10',
+    @fechaSegundoVenc = '2025-07-25';
+GO
+
+SELECT * FROM consorcio.detalle_expensa
+SELECT * FROM consorcio.pago
+
+--------------------------------------------------------------------------------
+-- NUMERO: 11
 -- ARCHIVO: -
 -- PROCEDIMIENTO: Insercion de datos a la tabla estado_financiero
 --------------------------------------------------------------------------------
@@ -123,7 +159,7 @@ EXEC consorcio.SP_cargar_estado_financiero;
 SELECT * FROM consorcio.estado_financiero;
 
 --------------------------------------------------------------------------------
--- NUMERO: 10
+-- NUMERO: 12
 -- ARCHIVO: -
 -- PROCEDIMIENTO: Modificacion de tablas para cifrado de datos sensibles
 --------------------------------------------------------------------------------
@@ -132,7 +168,7 @@ EXEC consorcio.SP_migrarEsquemaACifradoReversible
 GO
 
 --------------------------------------------------------------------------------
--- NUMERO: 11
+-- NUMERO: 13
 -- ARCHIVO: -
 -- PROCEDIMIENTO: Modificacion de tablas para descifrado de datos sensibles
 --------------------------------------------------------------------------------
