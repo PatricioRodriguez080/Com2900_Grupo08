@@ -1,5 +1,5 @@
 /*
-===============================================================================
+================================================================================
 Materia:          Bases de Datos Aplicadas
 Comisión:         01-2900
 Grupo:            G08
@@ -9,8 +9,8 @@ Integrantes:
     - Rodriguez Arrien, Juan Manuel (44259478)
     - Rodriguez, Patricio (45683229)
     - Ruiz, Leonel Emiliano (45537914)
-Enunciado:        "02 - Creación de Procedimientos Almacenados ABMs"
-===============================================================================
+Enunciado:        "03 - Creación de Procedimientos Almacenados ABMs"
+================================================================================
 */
 
 USE Com2900G08;
