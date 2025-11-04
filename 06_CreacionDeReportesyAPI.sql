@@ -30,8 +30,6 @@ GO
 -- REPORTE 1
 -- Flujo de caja en forma semanal
 --------------------------------------------------------------------------------
-
-
 CREATE OR ALTER PROCEDURE consorcio.SP_reporte_1
     @idConsorcio INT,
     @FechaInicio DATE,
@@ -103,11 +101,6 @@ BEGIN
 END;
 GO
 
-EXEC consorcio.SP_reporte_1
-    @idConsorcio = 1,
-    @FechaInicio = '2025-05-01',
-    @FechaFin = '2025-05-31';
-GO
 
 --------------------------------------------------------------------------------
 -- REPORTE 2
@@ -212,18 +205,11 @@ END;
 GO
 
 
-EXEC consorcio.SP_reporte_2
-    @idConsorcio = 1,
-    @Anio = 2025,
-    @Piso='2';
-
-
 --------------------------------------------------------------------------------
 -- REPORTE 3
 -- Presente un cuadro cruzado con la recaudación total desagregada según su procedencia
 -- (ordinario, extraordinario, etc.) según el periodo.
 --------------------------------------------------------------------------------
-
 CREATE OR ALTER PROCEDURE consorcio.SP_reporte_3
     @idConsorcio INT,
     @Anio INT,
@@ -327,13 +313,6 @@ BEGIN
         @mesFinParam = @mesFin;
 
 END;
-GO
-
-EXEC consorcio.SP_reporte_3
-    @idConsorcio = 1,
-    @Anio = 2025,
-    @PeriodoInicio = 'abril',
-    @PeriodoFin = 'junio';
 GO
 
 --------------------------------------------------------------------------------
@@ -464,11 +443,6 @@ BEGIN
 END;
 GO
 
-EXEC consorcio.SP_reporte_4
-    @FechaInicio = '2025-04-01',
-    @FechaFin = '2025-06-30';
-GO
-
 
 --------------------------------------------------------------------------------
 -- REPORTE 5
@@ -506,8 +480,6 @@ BEGIN
         Deuda_Total DESC;
 END
 GO
-
-EXEC consorcio.SP_reporte_5;
 
 
 --------------------------------------------------------------------------------
@@ -557,6 +529,3 @@ BEGIN
 
 END;
 GO
-
-EXEC consorcio.SP_reporte_6
-    @idConsorcio = 1
