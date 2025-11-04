@@ -1,4 +1,4 @@
-## 👥 Integrantes
+# 👥 Integrantes
 
 | Nombre y Apellido              | Usuario de GitHub                         |
 |-------------------------------|-------------------------------------------|
@@ -19,3 +19,24 @@ El equipo de desarrollo ha adoptado las siguientes convenciones de nomenclatura 
 | **Store Procedures (SP)** | `snake_case` (minúsculas y guion bajo) | Descriptivo de la acción a realizar y prefijo SP. | `sp_calcular_morosidad` |
 | **Columnas (Atributos)** | `camelCase` | Descriptivo. | `saldoAnterior`, `nroFactura` |
 | **Variables/Parámetros** | `camelCase` | Descriptivo. | `@montoTotal`, `@idConsorcio` |
+
+
+# Uso de SQL Dinámico y Justificación
+
+El SQL Dinámico se emplea en el proyecto para resolver requerimientos específicos relacionados con la **seguridad** y la **flexibilidad** en la manipulación de archivos.
+
+---
+
+### **Carga de Archivos y Rutas Dinámicas**
+
+Se utiliza para la **carga de archivos** mediante los **Stored Procedures (SP)**, ya que se requiere que las **rutas de los archivos** sean pasadas como **parámetros**.
+
+* Este *path dinámico* obliga a la utilización de SQL Dinámico para poder invocar las funciones de manejo de archivos de SQL Server como **`OPENROWSET`** y **`BULK INSERT`**. Esto permite que el SP pueda trabajar con cualquier ubicación de archivo especificada por el usuario en tiempo de ejecución.
+
+---
+
+### **Seguridad y Cifrado de Datos Sensibles**
+
+El SQL Dinámico también se aplica en el **SP de seguridad** para el proceso de **cifrado de datos sensibles**.
+
+* Su uso permite evitar que la **clave de encriptamiento** quede registrada en **posibles logs** del sistema o del servidor, aumentando así la seguridad al manejar la clave de manera transitoria y construida dinámicamente en memoria.

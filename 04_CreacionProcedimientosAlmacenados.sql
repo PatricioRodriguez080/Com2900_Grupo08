@@ -21,21 +21,18 @@ Enunciado:        "04 - Creación de Procedimientos Almacenados"
 --------------------------------------------------------------------------------
 
 -- Enable Ad Hoc Distributed Queries
- EXEC sp_configure 'show advanced options', 1; RECONFIGURE;
- EXEC sp_configure 'Ad Hoc Distributed Queries', 1; RECONFIGURE;
-GO
+
 
 -- Set provider properties for Microsoft.ACE.OLEDB.12.0
-EXEC sp_MSset_oledb_prop N'Microsoft.ACE.OLEDB.12.0', N'AllowInProcess', 1;
-EXEC sp_MSset_oledb_prop N'Microsoft.ACE.OLEDB.12.0', N'DynamicParameters', 1;
-GO
+-- EXEC sp_MSset_oledb_prop N'Microsoft.ACE.OLEDB.12.0', N'AllowInProcess', 1;
+-- EXEC sp_MSset_oledb_prop N'Microsoft.ACE.OLEDB.12.0', N'DynamicParameters', 1;
+-- GO
 
 CREATE OR ALTER PROCEDURE consorcio.SP_importar_consorcios_excel
     @path NVARCHAR(255)
 AS
 BEGIN
     SET NOCOUNT ON;
-
     -------------------------------------------------------------------------
     -- 1. Crear tabla staging
     -------------------------------------------------------------------------
@@ -573,8 +570,6 @@ BEGIN
         -- 6. LIMPIEZA DE TABLA TEMPORAL
         IF OBJECT_ID('tempdb..#temporal') IS NOT NULL
             DROP TABLE #temporal;
-            
-        SELECT 'Importación de datos de persona y relaciones completada con éxito. Procesamiento basado en conjuntos.' AS Resultado;
 
     END TRY
     BEGIN CATCH
@@ -1277,108 +1272,303 @@ BEGIN
 END;
 GO
 
-------------- SP 10 SEGURIDAD --------------------
+
+--------------------------------------------------------------------------------
+-- NUMERO: 10
+-- ARCHIVO: -
+-- PROCEDIMIENTO: Modificacion de tablas para cifrado de datos sensibles
+--------------------------------------------------------------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_MigrarEsquemaACifradoReversible_Seguro
-    @FraseClave NVARCHAR(128)
+    @FraseClave NVARCHAR(128)
 AS
 BEGIN
-    SET NOCOUNT ON;
-    
-    DECLARE @SQL NVARCHAR(MAX);
-    DECLARE @ConstraintName NVARCHAR(128);
+    SET NOCOUNT ON;
+    
+    DECLARE @SQL NVARCHAR(MAX);
+    DECLARE @ConstraintName NVARCHAR(128);
+    BEGIN TRANSACTION
+    
+    BEGIN TRY
 
-    -- Eliminación de Constraints fijos
-    ALTER TABLE consorcio.persona DROP CONSTRAINT IF EXISTS chk_persona_cuentaOrigen;
-    ALTER TABLE consorcio.unidad_funcional DROP CONSTRAINT IF EXISTS chk_unidadFuncional_cuentaOrigen;
-    ALTER TABLE consorcio.pago DROP CONSTRAINT IF EXISTS chk_pago_cuentaOrigen;
+        -- Eliminación de Constraints Fijos (CHECK Constraints)
+        -- Uso de IF EXISTS para un código más limpio y que no falle si no existe
+        ALTER TABLE consorcio.persona DROP CONSTRAINT IF EXISTS chk_persona_cuentaOrigen;
+        ALTER TABLE consorcio.unidad_funcional DROP CONSTRAINT IF EXISTS chk_unidadFuncional_cuentaOrigen;
+        ALTER TABLE consorcio.pago DROP CONSTRAINT IF EXISTS chk_pago_cuentaOrigen;
 
-    -- 2. Creación de columnas temporales (SE ELIMINA dni_hash_unicidad)
-    
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'dni_temp' AND Object_ID = Object_ID(N'consorcio.persona'))
-        ALTER TABLE consorcio.persona ADD dni_temp VARBINARY(256) NULL;
-        
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'email_temp' AND Object_ID = Object_ID(N'consorcio.persona'))
-        ALTER TABLE consorcio.persona ADD email_temp VARBINARY(256) NULL;
-        
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'telefono_temp' AND Object_ID = Object_ID(N'consorcio.persona'))
-        ALTER TABLE consorcio.persona ADD telefono_temp VARBINARY(256) NULL;
-        
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'cuentaOrigen_temp' AND Object_ID = Object_ID(N'consorcio.persona'))
-        ALTER TABLE consorcio.persona ADD cuentaOrigen_temp VARBINARY(256) NULL;
+        -- Creación de columnas temporales para el cifrado (si no existen)
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'dni_temp' AND Object_ID = OBJECT_ID(N'consorcio.persona'))
+            ALTER TABLE consorcio.persona ADD dni_temp VARBINARY(256) NULL;
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'email_temp' AND Object_ID = OBJECT_ID(N'consorcio.persona'))
+            ALTER TABLE consorcio.persona ADD email_temp VARBINARY(256) NULL;
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'telefono_temp' AND Object_ID = OBJECT_ID(N'consorcio.persona'))
+            ALTER TABLE consorcio.persona ADD telefono_temp VARBINARY(256) NULL;
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'cuentaOrigen_temp' AND Object_ID = OBJECT_ID(N'consorcio.persona'))
+            ALTER TABLE consorcio.persona ADD cuentaOrigen_temp VARBINARY(256) NULL;
 
-    SET @SQL = N'
-    UPDATE consorcio.persona
-    SET 
-        dni_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(dni AS VARCHAR), 1, CONVERT(VARBINARY, idPersona)),
-        email_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(email AS VARCHAR(100)), 1, CONVERT(VARBINARY, idPersona)),
-        telefono_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(telefono AS VARCHAR(20)), 1, CONVERT(VARBINARY, idPersona)),
-        cuentaOrigen_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(cuentaOrigen AS CHAR(22)), 1, CONVERT(VARBINARY, idPersona))
-    ';
-    EXEC sp_executesql @SQL, N'@FraseClaveParam NVARCHAR(128)', @FraseClaveParam = @FraseClave;
+        -- Cifrado y actualización de los datos originales a las columnas temporales
+        SET @SQL = N'
+        UPDATE T
+        SET 
+            dni_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(dni AS NVARCHAR(50)), 1, CONVERT(VARBINARY(4), idPersona)),
+            email_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(email AS NVARCHAR(100)), 1, CONVERT(VARBINARY(4), idPersona)),
+            telefono_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(telefono AS NVARCHAR(20)), 1, CONVERT(VARBINARY(4), idPersona)),
+            cuentaOrigen_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(cuentaOrigen AS CHAR(22)), 1, CONVERT(VARBINARY(4), idPersona))
+        FROM consorcio.persona T
+        WHERE 
+            dni IS NOT NULL OR 
+            email IS NOT NULL OR 
+            telefono IS NOT NULL OR 
+            cuentaOrigen IS NOT NULL; -- Asegurar que solo se cifren filas con datos
+        ';
+        EXEC sp_executesql @SQL, N'@FraseClaveParam NVARCHAR(128)', @FraseClaveParam = @FraseClave;
 
-    SELECT @ConstraintName = NULL; -- Reiniciar
-    
-    -- Buscar la restricción UQ o PK ligada a 'dni' original
-    SELECT TOP 1 @ConstraintName = kc.name 
-    FROM sys.key_constraints kc
-    INNER JOIN sys.index_columns ic ON kc.parent_object_id = ic.object_id AND kc.unique_index_id = ic.index_id
-    INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
-    WHERE kc.parent_object_id = OBJECT_ID('consorcio.persona') 
-      AND kc.type IN ('UQ', 'PK') 
-      AND c.name = 'dni';
-    
-    -- Si se encuentra la restricción, eliminarla antes de eliminar la columna
-    IF @ConstraintName IS NOT NULL
-    BEGIN
-        SET @SQL = N'ALTER TABLE consorcio.persona DROP CONSTRAINT ' + QUOTENAME(@ConstraintName);
-        EXEC sp_executesql @SQL;
-        PRINT 'Restricción dependiente (' + @ConstraintName + ') eliminada.';
-    END
-    
-    -- Eliminar columnas originales
-    ALTER TABLE consorcio.persona DROP COLUMN dni;
-    ALTER TABLE consorcio.persona DROP COLUMN email;
-    ALTER TABLE consorcio.persona DROP COLUMN telefono;
-    ALTER TABLE consorcio.persona DROP COLUMN cuentaOrigen;
+        -- Eliminación de restricciones de unicidad/PK en 'dni'
+        SELECT @ConstraintName = NULL; 
+        
+        SELECT TOP 1 @ConstraintName = kc.name 
+        FROM sys.key_constraints kc
+        INNER JOIN sys.index_columns ic ON kc.parent_object_id = ic.object_id AND kc.unique_index_id = ic.index_id
+        INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+        WHERE kc.parent_object_id = OBJECT_ID('consorcio.persona') 
+          AND kc.type IN ('UQ', 'PK') 
+          AND c.name = 'dni';
+        
+        IF @ConstraintName IS NOT NULL
+        BEGIN
+            SET @SQL = N'ALTER TABLE consorcio.persona DROP CONSTRAINT ' + QUOTENAME(@ConstraintName);
+            EXEC sp_executesql @SQL;
+            PRINT 'INFO: Restricción dependiente (' + @ConstraintName + ') en consorcio.persona.dni eliminada.';
+        END
+        
+        -- Eliminar columnas originales
+        ALTER TABLE consorcio.persona DROP COLUMN dni;
+        ALTER TABLE consorcio.persona DROP COLUMN email;
+        ALTER TABLE consorcio.persona DROP COLUMN telefono;
+        ALTER TABLE consorcio.persona DROP COLUMN cuentaOrigen;
 
-    -- Renombrar
-    EXEC sp_rename 'consorcio.persona.dni_temp', 'dni', 'COLUMN';
-    EXEC sp_rename 'consorcio.persona.email_temp', 'email', 'COLUMN';
-    EXEC sp_rename 'consorcio.persona.telefono_temp', 'telefono', 'COLUMN';
-    EXEC sp_rename 'consorcio.persona.cuentaOrigen_temp', 'cuentaOrigen', 'COLUMN';
+        -- Renombrar columnas temporales a sus nombres originales
+        EXEC sp_rename 'consorcio.persona.dni_temp', 'dni', 'COLUMN';
+        EXEC sp_rename 'consorcio.persona.email_temp', 'email', 'COLUMN';
+        EXEC sp_rename 'consorcio.persona.telefono_temp', 'telefono', 'COLUMN';
+        EXEC sp_rename 'consorcio.persona.cuentaOrigen_temp', 'cuentaOrigen', 'COLUMN';
 
-    -- Aplicar NOT NULL a las nuevas columnas cifradas
-    ALTER TABLE consorcio.persona ALTER COLUMN dni VARBINARY(256) NOT NULL;
-    ALTER TABLE consorcio.persona ALTER COLUMN cuentaOrigen VARBINARY(256) NOT NULL;
+        -- Aplicar NOT NULL a las nuevas columnas cifradas (ahora VARBINARY)
+        ALTER TABLE consorcio.persona ALTER COLUMN dni VARBINARY(256) NOT NULL;
+        ALTER TABLE consorcio.persona ALTER COLUMN cuentaOrigen VARBINARY(256) NOT NULL;
 
-    -- Unidad Funcional
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'cuentaOrigen_temp' AND Object_ID = Object_ID(N'consorcio.unidad_funcional'))
-        ALTER TABLE consorcio.unidad_funcional ADD cuentaOrigen_temp VARBINARY(256) NULL;
-    
-    SET @SQL = N'
-    UPDATE consorcio.unidad_funcional
-    SET cuentaOrigen_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(cuentaOrigen AS CHAR(22)), 1, CONVERT(VARBINARY, idUnidadFuncional));
-    ';
-    EXEC sp_executesql @SQL, N'@FraseClaveParam NVARCHAR(128)', @FraseClaveParam = @FraseClave;
+        -------------------------------------------------------------
+        -- MIGRACIÓN DE cuentaOrigen en otras tablas (unidad_funcional y pago)
+        -------------------------------------------------------------
 
-    ALTER TABLE consorcio.unidad_funcional DROP COLUMN cuentaOrigen;
-    EXEC sp_rename 'consorcio.unidad_funcional.cuentaOrigen_temp', 'cuentaOrigen', 'COLUMN';
-    ALTER TABLE consorcio.unidad_funcional ALTER COLUMN cuentaOrigen VARBINARY(256) NOT NULL;
+        -- Función para simplificar la migración de cuentaOrigen en otras tablas
+        DECLARE @TableName NVARCHAR(128);
+        DECLARE @IdColumnName NVARCHAR(128);
 
-    -- Pago
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'cuentaOrigen_temp' AND Object_ID = Object_ID(N'consorcio.pago'))
-        ALTER TABLE consorcio.pago ADD cuentaOrigen_temp VARBINARY(256) NULL;
-    
-    SET @SQL = N'
-    UPDATE consorcio.pago
-    SET cuentaOrigen_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(cuentaOrigen AS CHAR(22)), 1, CONVERT(VARBINARY, idPago));
-    ';
-    EXEC sp_executesql @SQL, N'@FraseClaveParam NVARCHAR(128)', @FraseClaveParam = @FraseClave;
+        -- Tabla: unidad_funcional
+        SET @TableName = N'consorcio.unidad_funcional';
+        SET @IdColumnName = N'idUnidadFuncional';
 
-    ALTER TABLE consorcio.pago DROP COLUMN cuentaOrigen;
-    EXEC sp_rename 'consorcio.pago.cuentaOrigen_temp', 'cuentaOrigen', 'COLUMN';
-    ALTER TABLE consorcio.pago ALTER COLUMN cuentaOrigen VARBINARY(256) NOT NULL;
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'cuentaOrigen_temp' AND Object_ID = OBJECT_ID(@TableName))
+            SET @SQL = N'ALTER TABLE ' + @TableName + ' ADD cuentaOrigen_temp VARBINARY(256) NULL;';
+        ELSE
+            SET @SQL = N'UPDATE ' + @TableName + ' SET cuentaOrigen_temp = NULL;'; -- Limpiar si ya existe
+        EXEC sp_executesql @SQL;
 
-    PRINT 'Migración de esquema a cifrado reversible COMPLETADA. Los datos existentes fueron cifrados con éxito.';
+        SET @SQL = N'
+        UPDATE T
+        SET cuentaOrigen_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(cuentaOrigen AS CHAR(22)), 1, CONVERT(VARBINARY(4), ' + @IdColumnName + '))
+        FROM ' + @TableName + ' T
+        WHERE cuentaOrigen IS NOT NULL;
+        ';
+        EXEC sp_executesql @SQL, N'@FraseClaveParam NVARCHAR(128)', @FraseClaveParam = @FraseClave;
+        
+        SET @SQL = N'ALTER TABLE ' + @TableName + ' DROP COLUMN cuentaOrigen;';
+        EXEC sp_executesql @SQL;
+        
+        SET @SQL = N'EXEC sp_rename ''' + @TableName + '.cuentaOrigen_temp'', ''cuentaOrigen'', ''COLUMN'';';
+        EXEC sp_executesql @SQL;
+        
+        SET @SQL = N'ALTER TABLE ' + @TableName + ' ALTER COLUMN cuentaOrigen VARBINARY(256) NOT NULL;';
+        EXEC sp_executesql @SQL;
+        PRINT 'INFO: Migrada columna cuentaOrigen en ' + @TableName + '.';
+
+
+        -- Tabla: pago
+        SET @TableName = N'consorcio.pago';
+        SET @IdColumnName = N'idPago'; -- Cambiar al ID de la tabla pago
+
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'cuentaOrigen_temp' AND Object_ID = OBJECT_ID(@TableName))
+            SET @SQL = N'ALTER TABLE ' + @TableName + ' ADD cuentaOrigen_temp VARBINARY(256) NULL;';
+        ELSE
+            SET @SQL = N'UPDATE ' + @TableName + ' SET cuentaOrigen_temp = NULL;'; -- Limpiar si ya existe
+        EXEC sp_executesql @SQL;
+        
+        SET @SQL = N'
+        UPDATE T
+        SET cuentaOrigen_temp = ENCRYPTBYPASSPHRASE(@FraseClaveParam, CAST(cuentaOrigen AS CHAR(22)), 1, CONVERT(VARBINARY(4), ' + @IdColumnName + '))
+        FROM ' + @TableName + ' T
+        WHERE cuentaOrigen IS NOT NULL;
+        ';
+        EXEC sp_executesql @SQL, N'@FraseClaveParam NVARCHAR(128)', @FraseClaveParam = @FraseClave;
+
+        SET @SQL = N'ALTER TABLE ' + @TableName + ' DROP COLUMN cuentaOrigen;';
+        EXEC sp_executesql @SQL;
+
+        SET @SQL = N'EXEC sp_rename ''' + @TableName + '.cuentaOrigen_temp'', ''cuentaOrigen'', ''COLUMN'';';
+        EXEC sp_executesql @SQL;
+
+        SET @SQL = N'ALTER TABLE ' + @TableName + ' ALTER COLUMN cuentaOrigen VARBINARY(256) NOT NULL;';
+        EXEC sp_executesql @SQL;
+        PRINT 'INFO: Migrada columna cuentaOrigen en ' + @TableName + '.';
+
+
+        -- Finalización Exitosa
+        COMMIT TRANSACTION;
+        PRINT 'Migración de esquema a cifrado reversible COMPLETADA con éxito.';
+
+    END TRY
+    BEGIN CATCH
+        -- Manejo de Errores
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+            
+        -- Lanzar el error para que la aplicación lo detecte
+        THROW; 
+
+    END CATCH
+END
+GO
+
+--------------------------------------------------------------------------------
+-- NUMERO: 11
+-- ARCHIVO: -
+-- PROCEDIMIENTO: Modificacion de tablas para descifrado de datos sensibles
+--------------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE consorcio.SP_RevertirEsquemaADatosClaros_Seguro
+    @FraseClave NVARCHAR(128)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    DECLARE @SQL NVARCHAR(MAX);
+    
+    BEGIN TRANSACTION
+    
+    BEGIN TRY
+
+        -------------------------------------------------------------
+        -- REVERSIÓN TABLA consorcio.persona
+        -------------------------------------------------------------
+        
+        -- 1. Eliminación de la columna HASH de unicidad (si fue creada en la migración)
+        IF EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'dni_hash_unicidad' AND Object_ID = OBJECT_ID(N'consorcio.persona'))
+            ALTER TABLE consorcio.persona DROP COLUMN dni_hash_unicidad;
+            
+        -- 2. Creación de columnas temporales para el descifrado
+        
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'dni_temp_revert' AND Object_ID = OBJECT_ID(N'consorcio.persona'))
+            ALTER TABLE consorcio.persona ADD dni_temp_revert VARCHAR(50) NULL; 
+        
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'email_temp_revert' AND Object_ID = OBJECT_ID(N'consorcio.persona'))
+            ALTER TABLE consorcio.persona ADD email_temp_revert VARCHAR(100) NULL;
+        
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'telefono_temp_revert' AND Object_ID = OBJECT_ID(N'consorcio.persona'))
+            ALTER TABLE consorcio.persona ADD telefono_temp_revert VARCHAR(20) NULL;
+        
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'cuentaOrigen_temp_revert' AND Object_ID = OBJECT_ID(N'consorcio.persona'))
+            ALTER TABLE consorcio.persona ADD cuentaOrigen_temp_revert CHAR(22) NULL;
+
+        -- 3. Descifrado de datos a las columnas temporales
+        SET @SQL = N'
+        UPDATE T
+        SET 
+            dni_temp_revert = CAST(DECRYPTBYPASSPHRASE(@FraseClaveParam, dni, 1, CONVERT(VARBINARY(4), idPersona)) AS VARCHAR(50)),
+            email_temp_revert = CAST(DECRYPTBYPASSPHRASE(@FraseClaveParam, email, 1, CONVERT(VARBINARY(4), idPersona)) AS VARCHAR(100)),
+            telefono_temp_revert = CAST(DECRYPTBYPASSPHRASE(@FraseClaveParam, telefono, 1, CONVERT(VARBINARY(4), idPersona)) AS VARCHAR(20)),
+            cuentaOrigen_temp_revert = CAST(DECRYPTBYPASSPHRASE(@FraseClaveParam, cuentaOrigen, 1, CONVERT(VARBINARY(4), idPersona)) AS CHAR(22))
+        FROM consorcio.persona T
+        WHERE dni IS NOT NULL;
+        ';
+        EXEC sp_executesql @SQL, N'@FraseClaveParam NVARCHAR(128)', @FraseClaveParam = @FraseClave;
+
+        -- 4. Eliminación de las columnas cifradas (VARBINARY)
+        ALTER TABLE consorcio.persona DROP COLUMN dni;
+        ALTER TABLE consorcio.persona DROP COLUMN email;
+        ALTER TABLE consorcio.persona DROP COLUMN telefono;
+        ALTER TABLE consorcio.persona DROP COLUMN cuentaOrigen;
+
+        -- 5. Renombrar columnas temporales a sus nombres originales (AJUSTE CLAVE: Se califica el nombre)
+        EXEC sp_rename 'consorcio.persona.dni_temp_revert', 'dni', 'COLUMN';
+        EXEC sp_rename 'consorcio.persona.email_temp_revert', 'email', 'COLUMN';
+        EXEC sp_rename 'consorcio.persona.telefono_temp_revert', 'telefono', 'COLUMN';
+        EXEC sp_rename 'consorcio.persona.cuentaOrigen_temp_revert', 'cuentaOrigen', 'COLUMN';
+
+        -- 6. Restaurar tipos de datos, nulabilidad y restricciones
+        ALTER TABLE consorcio.persona ALTER COLUMN dni VARCHAR(50) NOT NULL; 
+        ALTER TABLE consorcio.persona ALTER COLUMN cuentaOrigen CHAR(22) NOT NULL; 
+        
+        -- Restaurar restricciones UNIQUE en DNI
+        ALTER TABLE consorcio.persona ADD CONSTRAINT uq_persona_dni UNIQUE (dni);
+        
+        -- Restaurar restricciones CHECK en cuentaOrigen
+        ALTER TABLE consorcio.persona ADD CONSTRAINT chk_persona_cuentaOrigen CHECK (ISNUMERIC(cuentaOrigen) = 1);
+
+        -------------------------------------------------------------
+        -- REVERSIÓN TABLA consorcio.unidad_funcional (Solo cuentaOrigen)
+        -------------------------------------------------------------
+        
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'cuentaOrigen_temp_revert' AND Object_ID = OBJECT_ID(N'consorcio.unidad_funcional'))
+            ALTER TABLE consorcio.unidad_funcional ADD cuentaOrigen_temp_revert CHAR(22) NULL;
+            
+        SET @SQL = N'
+        UPDATE T
+        SET cuentaOrigen_temp_revert = CAST(DECRYPTBYPASSPHRASE(@FraseClaveParam, cuentaOrigen, 1, CONVERT(VARBINARY(4), idUnidadFuncional)) AS CHAR(22))
+        FROM consorcio.unidad_funcional T
+        WHERE cuentaOrigen IS NOT NULL;
+        ';
+        EXEC sp_executesql @SQL, N'@FraseClaveParam NVARCHAR(128)', @FraseClaveParam = @FraseClave;
+
+        ALTER TABLE consorcio.unidad_funcional DROP COLUMN cuentaOrigen;
+        -- AJUSTE CLAVE: Se califica el nombre
+        EXEC sp_rename 'consorcio.unidad_funcional.cuentaOrigen_temp_revert', 'cuentaOrigen', 'COLUMN';
+        ALTER TABLE consorcio.unidad_funcional ALTER COLUMN cuentaOrigen CHAR(22) NOT NULL;
+        ALTER TABLE consorcio.unidad_funcional ADD CONSTRAINT chk_unidadFuncional_cuentaOrigen CHECK (ISNUMERIC(cuentaOrigen) = 1);
+
+
+        -------------------------------------------------------------
+        -- REVERSIÓN TABLA consorcio.pago (Solo cuentaOrigen)
+        -------------------------------------------------------------
+        
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'cuentaOrigen_temp_revert' AND Object_ID = OBJECT_ID(N'consorcio.pago'))
+            ALTER TABLE consorcio.pago ADD cuentaOrigen_temp_revert CHAR(22) NULL;
+            
+        SET @SQL = N'
+        UPDATE T
+        SET cuentaOrigen_temp_revert = CAST(DECRYPTBYPASSPHRASE(@FraseClaveParam, cuentaOrigen, 1, CONVERT(VARBINARY(4), idPago)) AS CHAR(22))
+        FROM consorcio.pago T
+        WHERE cuentaOrigen IS NOT NULL;
+        ';
+        EXEC sp_executesql @SQL, N'@FraseClaveParam NVARCHAR(128)', @FraseClaveParam = @FraseClave;
+
+        ALTER TABLE consorcio.pago DROP COLUMN cuentaOrigen;
+        -- AJUSTE CLAVE: Se califica el nombre
+        EXEC sp_rename 'consorcio.pago.cuentaOrigen_temp_revert', 'cuentaOrigen', 'COLUMN';
+        ALTER TABLE consorcio.pago ALTER COLUMN cuentaOrigen CHAR(22) NOT NULL;
+        ALTER TABLE consorcio.pago ADD CONSTRAINT chk_pago_cuentaOrigen CHECK (ISNUMERIC(cuentaOrigen) = 1);
+
+        -- 7. Finalización Exitosa
+        COMMIT TRANSACTION;
+        PRINT 'Reversión de esquema a datos en claro COMPLETADA con éxito. Las restricciones y tipos originales fueron restaurados.';
+
+    END TRY
+    BEGIN CATCH
+        -- 8. Manejo de Errores
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+            
+        THROW; 
+
+    END CATCH
 END
 GO
