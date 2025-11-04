@@ -27,6 +27,89 @@ RECONFIGURE;
 GO
 
 --------------------------------------------------------------------------------
+-- REPORTE 1
+-- Flujo de caja en forma semanal
+--------------------------------------------------------------------------------
+
+
+CREATE OR ALTER PROCEDURE consorcio.SP_reporte_1
+    @idConsorcio INT,
+    @FechaInicio DATE,
+    @FechaFin DATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    BEGIN TRY
+        --Prorratear cada pago individual
+        WITH PagosProrrateados AS (
+            SELECT
+                p.fecha,
+                CASE 
+                    WHEN ISNULL(de.totalAPagar, 0) <= 0 THEN p.importe 
+                    ELSE p.importe * (ISNULL(de.expensasOrdinarias, 0) / de.totalAPagar) 
+                END AS PagoOrdinario,
+                CASE 
+                    WHEN ISNULL(de.totalAPagar, 0) <= 0 THEN 0.00
+                    ELSE p.importe * (ISNULL(de.expensasExtraordinarias, 0) / de.totalAPagar) 
+                END AS PagoExtraordinario
+            FROM
+                consorcio.pago p
+            JOIN
+                consorcio.detalle_expensa de ON p.idDetalleExpensa = de.idDetalleExpensa
+            JOIN
+                consorcio.expensa e ON de.idExpensa = e.idExpensa
+            WHERE
+                e.idConsorcio = @idConsorcio
+                AND p.fecha BETWEEN @FechaInicio AND @FechaFin
+                AND p.idDetalleExpensa IS NOT NULL 
+        ),
+        
+        --Agrupar por semana
+        RecaudacionSemanal AS (
+            SELECT
+                DATEPART(year, pp.fecha) AS Anio,
+                DATEPART(week, pp.fecha) AS Semana,
+                SUM(pp.PagoOrdinario) AS RecaudadoOrdinario,
+                SUM(pp.PagoExtraordinario) AS RecaudadoExtraordinario,
+                SUM(pp.PagoOrdinario + pp.PagoExtraordinario) AS TotalSemanal
+            FROM
+                PagosProrrateados pp
+            GROUP BY
+                DATEPART(year, pp.fecha),
+                DATEPART(week, pp.fecha)
+        )
+
+        SELECT
+            s.Anio,
+            s.Semana,
+            CAST(s.RecaudadoOrdinario AS DECIMAL(12, 2)) AS RecaudadoOrdinario,
+            CAST(s.RecaudadoExtraordinario AS DECIMAL(12, 2)) AS RecaudadoExtraordinario,
+            CAST(s.TotalSemanal AS DECIMAL(12, 2)) AS TotalSemanal,
+            
+            CAST(AVG(s.TotalSemanal) OVER () AS DECIMAL(12, 2)) AS PromedioPeriodo,
+            
+            CAST(SUM(s.TotalSemanal) OVER (ORDER BY s.Anio, s.Semana ROWS UNBOUNDED PRECEDING) AS DECIMAL(12, 2)) AS AcumuladoProgresivo
+        FROM
+            RecaudacionSemanal s
+        ORDER BY
+            s.Anio, s.Semana;
+
+    END TRY
+    BEGIN CATCH
+        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE(), @ErrNo INT = ERROR_NUMBER();
+        RAISERROR('Error al generar Reporte 1 (Flujo Semanal): (Err %d) %s', 16, 1, @ErrNo, @ErrMsg);
+    END CATCH
+END;
+GO
+
+EXEC consorcio.SP_reporte_1
+    @idConsorcio = 1,
+    @FechaInicio = '2025-05-01',
+    @FechaFin = '2025-05-31';
+GO
+
+--------------------------------------------------------------------------------
 -- REPORTE 2
 -- Total de recaudación por mes y departamento en formato de tabla cruzada
 --------------------------------------------------------------------------------
