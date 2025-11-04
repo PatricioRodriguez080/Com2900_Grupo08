@@ -233,3 +233,8 @@ CREATE TABLE consorcio.proveedor (
 
     CONSTRAINT fk_proveedor_consorcio FOREIGN KEY (idConsorcio) REFERENCES consorcio.consorcio(idConsorcio),
 );
+
+-- Para realizar la posterior importación de datos mediante el uso de OPENROWSET --
+EXEC sp_configure 'show advanced options', 1; RECONFIGURE;
+EXEC sp_configure 'Ad Hoc Distributed Queries', 1; RECONFIGURE;
+GO
