@@ -1628,3 +1628,486 @@ BEGIN
     END CATCH
 END
 GO
+
+------------------------------
+
+--------------------------------
+--PRUEBA SP PARA DETALLE EXPENSA
+--------------------------------
+
+CREATE OR ALTER PROCEDURE consorcio.sp_asociarPagosAUF
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        DECLARE @PagosAsociados INT = 0;
+
+        -- Actualizamos (UPDATE) la tabla 'pago' uniéndola (JOIN) con 'unidad_funcional'
+        UPDATE P
+        SET
+            P.estaAsociado = 1 -- (Los marcamos como asociados)
+        FROM
+            consorcio.pago AS P
+        JOIN
+            consorcio.unidad_funcional AS UF
+            ON P.cuentaOrigen = UF.cuentaOrigen -- (El "match" por CBU/CVU)
+        WHERE
+            P.estaAsociado = 0 
+            AND UF.fechaBaja IS NULL       
+            AND P.idDetalleExpensa IS NULL;
+
+        -- Capturamos cuántas filas se actualizaron
+        SET @PagosAsociados = @@ROWCOUNT;
+
+        COMMIT TRANSACTION;
+
+        PRINT 'Asociación de Pagos a UFs completada.';
+        PRINT 'Pagos nuevos asociados (marcados como estaAsociado = 1): ' + CAST(@PagosAsociados AS VARCHAR(10));
+        RETURN 0;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        
+        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE(), @ErrNo INT = ERROR_NUMBER();
+      	RAISERROR('Error al asociar Pagos a UF (Err %d): %s. Transacción revertida.', 16, 1, @ErrNo, @ErrMsg);
+      	RETURN -100;
+  	END CATCH
+END;
+GO
+
+CREATE OR ALTER PROCEDURE consorcio.sp_generarFacturasMensuales
+    @idConsorcio INT,
+    @periodo VARCHAR(12),
+    @anio INT,
+    @fechaEmision DATE = NULL,
+    @fechaPrimerVenc DATE,
+    @fechaSegundoVenc DATE = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    -- Declaración de tasas de interés y variables
+    DECLARE @TasaMoraMenor DECIMAL(5,2) = 0.02; -- 2%
+    DECLARE @TasaMoraMayor DECIMAL(5,2) = 0.05; -- 5%
+    DECLARE @mes INT;
+    DECLARE @periodo_norm VARCHAR(12);
+
+    BEGIN TRANSACTION;
+
+    BEGIN TRY
+        --Normalización y Conversión de Periodo
+        SET @periodo_norm = LOWER(LTRIM(RTRIM(@periodo)));
+        IF @fechaEmision IS NULL SET @fechaEmision = GETDATE();
+
+        SET @mes = CASE @periodo_norm
+            WHEN 'enero' THEN 1 WHEN 'febrero' THEN 2 WHEN 'marzo' THEN 3 WHEN 'abril' THEN 4
+            WHEN 'mayo' THEN 5 WHEN 'junio' THEN 6 WHEN 'julio' THEN 7 WHEN 'agosto' THEN 8
+            WHEN 'septiembre' THEN 9 WHEN 'octubre' THEN 10 WHEN 'noviembre' THEN 11 WHEN 'diciembre' THEN 12
+            ELSE NULL END;
+
+        IF @mes IS NULL
+        BEGIN
+            RAISERROR('Periodo inválido.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN -10;
+        END;
+
+        --Validar Expensa Existente
+        DECLARE @idExpensa INT;
+        SELECT @idExpensa = idExpensa
+        FROM consorcio.expensa
+        WHERE idConsorcio = @idConsorcio
+          AND periodo = @periodo_norm
+          AND anio = @anio;
+
+      	IF @idExpensa IS NULL
+        BEGIN
+            RAISERROR('No se encontró la expensa (Cierre) para el Consorcio y periodo indicados.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN -11;
+        END;
+
+        -- NO VOLVER A GENERAR SI YA EXISTEN (Importante para corridas de prueba)
+        IF EXISTS (SELECT 1 FROM consorcio.detalle_expensa WHERE idExpensa = @idExpensa)
+      	BEGIN
+        	PRINT 'Advertencia: Las facturas para este cierre (idExpensa=' + CAST(@idExpensa AS VARCHAR(10)) + ') ya existen. No se generó nada nuevo.';
+        	COMMIT TRANSACTION; -- Confirmamos la transacción (no hacer nada es un éxito)
+        	RETURN 0; -- Salimos limpiamente
+      	END;
+
+        -- Totales de gastos del mes actual
+        DECLARE @TotalGastosOrd DECIMAL(12,2) = 0, @TotalGastosExt DECIMAL(12,2) = 0;
+      	SELECT 
+        	@TotalGastosOrd = ISNULL(SUM(subTotalOrdinarios),0),
+        	@TotalGastosExt = ISNULL(SUM(subTotalExtraOrd),0)
+      	FROM consorcio.gasto
+      	WHERE idExpensa = @idExpensa;
+        
+      	--Buscar Expensa y Detalle del Mes Anterior
+      	DECLARE @mesAnterior INT = CASE WHEN @mes = 1 THEN 12 ELSE @mes - 1 END;
+      	DECLARE @anioAnterior INT = CASE WHEN @mes = 1 THEN @anio - 1 ELSE @anio END;
+      	DECLARE @periodoAnterior VARCHAR(12) =
+        	CASE @mesAnterior WHEN 1 THEN 'enero' WHEN 2 THEN 'febrero' WHEN 3 THEN 'marzo' WHEN 4 THEN 'abril'
+                          	WHEN 5 THEN 'mayo' WHEN 6 THEN 'junio' WHEN 7 THEN 'julio' WHEN 8 THEN 'agosto'
+                          	WHEN 9 THEN 'septiembre' WHEN 10 THEN 'octubre' WHEN 11 THEN 'noviembre' WHEN 12 THEN 'diciembre' END;
+
+      	DECLARE @idExpensaAnterior INT = NULL;
+      	SELECT @idExpensaAnterior = idExpensa
+      	FROM consorcio.expensa
+      	WHERE idConsorcio = @idConsorcio
+        	AND periodo = @periodoAnterior
+        	AND anio = @anioAnterior;
+
+      	--Tabla temporal para calculos 
+      	DECLARE @CalculoPrevio TABLE (
+        	idUnidadFuncional INT PRIMARY KEY,
+        	coeficiente DECIMAL(5,2),
+        	saldoAnterior DECIMAL(12,2) DEFAULT 0,
+        	pagoRecibido DECIMAL(12,2) DEFAULT 0,
+  	    	deuda DECIMAL(12,2) DEFAULT 0,
+        	interesPorMora DECIMAL(12,2) DEFAULT 0
+      	);
+
+      	--POBLAR TABLA TEMPORAL CON DATOS DEL ARRASTRE
+      	INSERT INTO @CalculoPrevio (
+        	idUnidadFuncional, coeficiente, saldoAnterior, pagoRecibido, deuda, interesPorMora
+      	)
+      	SELECT
+        	UF.idUnidadFuncional,
+        	UF.coeficiente,
+        ISNULL(DE_Anterior.deuda, 0) + ISNULL(DE_Anterior.interesPorMora, 0) + ISNULL(DE_Anterior.expensasOrdinarias, 0) + ISNULL(DE_Anterior.expensasExtraordinarias, 0) AS saldoAnterior,
+        	ISNULL(Pagos_Anteriores.TotalPagado, 0) AS pagoRecibido,
+        (ISNULL(DE_Anterior.deuda, 0) + ISNULL(DE_Anterior.interesPorMora, 0) + ISNULL(DE_Anterior.expensasOrdinarias, 0) + ISNULL(DE_Anterior.expensasExtraordinarias, 0)) - ISNULL(Pagos_Anteriores.TotalPagado, 0) AS deuda,
+        	-- CÁLCULO DE INTERESES (Solo sobre deuda neta positiva)
+      	  	CASE
+            	WHEN (ISNULL(DE_Anterior.totalAPagar, 0) - ISNULL(Pagos_Anteriores.TotalPagado, 0)) <= 0 THEN 0 
+            	WHEN DE_Anterior.idDetalleExpensa IS NULL THEN 0 
+            	WHEN @fechaEmision > DE_Anterior.fechaSegundoVenc AND DE_Anterior.fechaSegundoVenc IS NOT NULL 
+                	THEN (ISNULL(DE_Anterior.totalAPagar, 0) - ISNULL(Pagos_Anteriores.TotalPagado, 0)) * @TasaMoraMayor
+          	  WHEN @fechaEmision > DE_Anterior.fechaPrimerVenc 
+              	  THEN (ISNULL(DE_Anterior.totalAPagar, 0) - ISNULL(Pagos_Anteriores.TotalPagado, 0)) * @TasaMoraMenor
+            	ELSE 0
+        	END AS interesPorMora
+      	FROM consorcio.unidad_funcional UF
+      	LEFT JOIN consorcio.detalle_expensa DE_Anterior
+        	ON UF.idUnidadFuncional = DE_Anterior.idUnidadFuncional
+        	AND DE_Anterior.idExpensa = @idExpensaAnterior
+      	LEFT JOIN (
+        	SELECT idDetalleExpensa, SUM(importe) AS TotalPagado
+        	FROM consorcio.pago
+        	WHERE idDetalleExpensa IS NOT NULL
+        	GROUP BY idDetalleExpensa
+      	) AS Pagos_Anteriores ON DE_Anterior.idDetalleExpensa = Pagos_Anteriores.idDetalleExpensa
+  	  WHERE UF.idConsorcio = @idConsorcio
+        	AND UF.fechaBaja IS NULL;
+        
+      	--Inserción final en detalle_expensa
+      	INSERT INTO consorcio.detalle_expensa (
+        	idExpensa, idUnidadFuncional,
+        	fechaEmision, fechaPrimerVenc, fechaSegundoVenc,
+        	saldoAnterior, pagoRecibido, deuda, interesPorMora,
+        	expensasOrdinarias, expensasExtraordinarias, totalAPagar
+      	)
+      	SELECT
+        	@idExpensa,
+        	CP.idUnidadFuncional,
+        	@fechaEmision,
+  	    	@fechaPrimerVenc,
+        	@fechaSegundoVenc,
+        	CP.saldoAnterior,
+  	    	CP.pagoRecibido,
+        	CP.deuda,
+    	    CP.interesPorMora,
+
+        	ROUND(@TotalGastosOrd * (CP.coeficiente / 100.0), 2) AS expensasOrdinarias,
+  	    	ROUND(@TotalGastosExt * (CP.coeficiente / 100.0), 2) AS expensasExtraordinarias,
+            ROUND(
+                (
+                ROUND(@TotalGastosOrd * (CP.coeficiente / 100.0), 2)
+                + ROUND(@TotalGastosExt * (CP.coeficiente / 100.0), 2)
+                + CP.deuda
+                + CP.interesPorMora
+                ), 2)
+            AS totalAPagar
+      	FROM @CalculoPrevio CP;
+
+      	COMMIT TRANSACTION;
+
+      	PRINT 'Generación de facturas completada correctamente para idExpensa ' + CAST(@idExpensa AS VARCHAR(20));
+  	    RETURN 0;
+  	END TRY
+  	BEGIN CATCH
+  	  	IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+  	  	DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE(), @ErrNo INT = ERROR_NUMBER();
+content:
+source:
+  	  	RAISERROR('Error al generar facturas (Err %d): %s', 16, 1, @ErrNo, @ErrMsg);
+  	  	RETURN -100;
+  	END CATCH
+END;
+GO
+
+CREATE OR ALTER PROCEDURE consorcio.sp_AsociarPagosConsumidos
+    @idConsorcio INT,
+    @periodo VARCHAR(12),
+    @anio INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    
+    -- Variables
+    DECLARE @idExpensaAConciliar INT;
+    DECLARE @mes INT;
+    DECLARE @periodo_norm VARCHAR(12) = LOWER(LTRIM(RTRIM(@periodo)));
+    DECLARE @fechaInicioPeriodo DATE;
+    DECLARE @fechaFinPeriodo DATE;
+    
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        --Conversion de Periodo y Calculo de Fechas
+        SET @mes = CASE @periodo_norm
+            WHEN 'enero' THEN 1 WHEN 'febrero' THEN 2 WHEN 'marzo' THEN 3 WHEN 'abril' THEN 4
+            WHEN 'mayo' THEN 5 WHEN 'junio' THEN 6 WHEN 'julio' THEN 7 WHEN 'agosto' THEN 8
+            WHEN 'septiembre' THEN 9 WHEN 'octubre' THEN 10 WHEN 'noviembre' THEN 11 WHEN 'diciembre' THEN 12
+            ELSE NULL END;
+
+        IF @mes IS NULL
+        BEGIN
+            RAISERROR('Periodo inválido.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN -10;
+        END;
+
+        SET @fechaInicioPeriodo = DATEFROMPARTS(@anio, @mes, 1);
+        SET @fechaFinPeriodo = EOMONTH(@fechaInicioPeriodo);
+
+
+        --IDENTIFICAR LA EXPENSA (Ej: Expensa de Abril)
+        SELECT @idExpensaAConciliar = idExpensa
+        FROM consorcio.expensa
+        WHERE idConsorcio = @idConsorcio
+          AND periodo = @periodo_norm
+          AND anio = @anio;
+
+        IF @idExpensaAConciliar IS NULL
+        BEGIN
+            RAISERROR('No se encontró la Expensa a conciliar (%s %d).', 16, 1, @periodo, @anio);
+            ROLLBACK TRANSACTION;
+            RETURN -11;
+        END
+
+        --Tabla temporal que mapea Pagos Disponibles a su idUnidadFuncional
+        IF OBJECT_ID('tempdb..#PagosMapeados') IS NOT NULL DROP TABLE #PagosMapeados;
+
+        SELECT
+            p.idPago,
+            uf.idUnidadFuncional
+        INTO #PagosMapeados
+        FROM consorcio.pago p
+        JOIN consorcio.unidad_funcional uf ON p.cuentaOrigen = uf.cuentaOrigen
+        WHERE p.estaAsociado = 1 
+          AND p.idDetalleExpensa IS NULL
+          AND p.fecha BETWEEN @fechaInicioPeriodo AND @fechaFinPeriodo; -- Filtro por fecha estricto
+        
+        -- Si no hay pagos para ese mes y consorcio, salimos
+        IF NOT EXISTS (SELECT 1 FROM #PagosMapeados)
+        BEGIN
+            PRINT 'No hay pagos disponibles o asociados para conciliar en el período ' + @periodo_norm + '.';
+            COMMIT TRANSACTION;
+            RETURN 0;
+        END
+
+        -- ASOCIACION
+        -- Asociamos el Pago (via idUnidadFuncional) al Detalle de Expensa (la factura)
+        
+        UPDATE p
+        SET p.idDetalleExpensa = de.idDetalleExpensa
+        FROM consorcio.pago p
+        JOIN #PagosMapeados pm ON p.idPago = pm.idPago -- Mapeo la UF desde el pago
+        JOIN consorcio.detalle_expensa de ON pm.idUnidadFuncional = de.idUnidadFuncional -- Condicion: misma UF
+        WHERE de.idExpensa = @idExpensaAConciliar; -- Condicion: Factura de la Expensa correcta (Ej: Abril)
+
+        DECLARE @PagosConsumidos INT = @@ROWCOUNT;
+        
+        COMMIT TRANSACTION;
+        
+        -- Limpieza
+        IF OBJECT_ID('tempdb..#PagosMapeados') IS NOT NULL DROP TABLE #PagosMapeados;
+        
+        PRINT 'Asociación de Pagos completada. Total de pagos consumidos: ' + CAST(@PagosConsumidos AS VARCHAR(10));
+        RETURN 0;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        IF OBJECT_ID('tempdb..#PagosMapeados') IS NOT NULL DROP TABLE #PagosMapeados;
+
+        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE(), @ErrNo INT = ERROR_NUMBER();
+        RAISERROR('Error al asociar Pagos (Err %d): %s.', 16, 1, @ErrNo, @ErrMsg);
+        RETURN -100;
+    END CATCH
+END;
+GO
+
+CREATE OR ALTER PROCEDURE consorcio.sp_OrquestarFlujoFacturacionMensual
+    @idConsorcio INT,
+    @periodoExpensa VARCHAR(12),
+    @anioExpensa INT,
+    @fechaEmision DATE,
+    @fechaPrimerVenc DATE,
+    @fechaSegundoVenc DATE = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    
+    DECLARE @Msg NVARCHAR(500);
+    DECLARE @periodo_norm VARCHAR(12);
+    DECLARE @idExpensaExistente INT;
+    
+    BEGIN TRY
+        PRINT N'================================================================================';
+        SET @Msg = N'INICIANDO FLUJO DE FACTURACIÓN COMPLETO para: ' + @periodoExpensa + ' ' + CAST(@anioExpensa AS VARCHAR) + ' (Consorcio ' + CAST(@idConsorcio AS VARCHAR) + ')';
+        PRINT @Msg;
+        PRINT N'================================================================================';
+
+        -- VALIDAR EXPENSA EXISTENTE
+        SET @periodo_norm = LOWER(LTRIM(RTRIM(@periodoExpensa)));
+
+        SELECT @idExpensaExistente = idExpensa
+        FROM consorcio.expensa
+        WHERE idConsorcio = @idConsorcio
+          AND periodo = @periodo_norm
+          AND anio = @anioExpensa;
+
+        IF @idExpensaExistente IS NULL
+        BEGIN
+            RAISERROR(N'ERROR: La expensa para Consorcio %d, %s %d NO está pre-cargada en la tabla consorcio.expensa.', 16, 1, @idConsorcio, @periodoExpensa, @anioExpensa);
+            RETURN -10;
+        END
+        
+        PRINT N'Expensa base pre-cargada encontrada: ID=' + CAST(@idExpensaExistente AS VARCHAR) + '.';
+
+        --GENERAR DETALLES DE EXPENSA
+        SET @Msg = N'1. Ejecutando sp_generarFacturasMensuales...';
+        PRINT @Msg;
+
+        -- El SP generador usa los mismos parámetros de Consorcio, Período y Año para encontrar el idExpensa
+        EXEC consorcio.sp_generarFacturasMensuales 
+            @idConsorcio = @idConsorcio, 
+            @periodo = @periodoExpensa, 
+            @anio = @anioExpensa, 
+            @fechaEmision = @fechaEmision,
+            @fechaPrimerVenc = @fechaPrimerVenc, 
+            @fechaSegundoVenc = @fechaSegundoVenc;
+
+        --PREPARAR/MARCAR PAGOS (Asociar Pagos entrantes a Unidades Funcionales)
+        SET @Msg = N'2. Ejecutando sp_asociarPagosAUF (Preparación de Pagos)...';
+        PRINT @Msg;
+
+        -- Este SP no requiere parametros de fecha/periodo, ya que solo marca los pagos nuevos
+        EXEC consorcio.sp_asociarPagosAUF;
+
+        --CONSUMIR PAGOS (Vincular Pagos a la Factura del mismo período)
+        SET @Msg = N'3. Ejecutando sp_AsociarPagosConsumidos (Consumo/Vinculación de Pagos)...';
+        PRINT @Msg;
+
+        -- Este SP requiere el periodo para filtrar los pagos por fecha de Abril y asociarlos a la factura de Abril.
+        EXEC consorcio.sp_AsociarPagosConsumidos
+            @idConsorcio = @idConsorcio,
+            @periodo = @periodoExpensa,
+            @anio = @anioExpensa;
+
+
+        PRINT N'================================================================================';
+        SET @Msg = N'FLUJO DE FACTURACIÓN COMPLETO EXITOSO para ' + @periodoExpensa + ' ' + CAST(@anioExpensa AS VARCHAR);
+        PRINT @Msg;
+        PRINT N'================================================================================';
+        
+        RETURN 0;
+
+    END TRY
+    BEGIN CATCH
+        SET @Msg = N'ERROR EN LA ORQUESTACIÓN: ' + ERROR_MESSAGE();
+        RAISERROR(@Msg, 16, 1);
+        RETURN -100;
+    END CATCH
+END;
+GO
+
+CREATE OR ALTER PROCEDURE consorcio.sp_OrquestarFlujoParaTodosLosConsorcios
+    @periodoExpensa VARCHAR(12),
+    @anioExpensa INT,
+    @fechaEmision DATE,
+    @fechaPrimerVenc DATE,
+    @fechaSegundoVenc DATE = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    PRINT N'================================================================================';
+    PRINT N'INICIANDO ORQUESTADOR GENERAL PARA: ' + @periodoExpensa + ' ' + CAST(@anioExpensa AS VARCHAR);
+    PRINT N'================================================================================';
+
+    IF OBJECT_ID('tempdb..#ConsorciosAProcesar') IS NOT NULL DROP TABLE #ConsorciosAProcesar;
+    
+    SELECT 
+        idConsorcio,
+        nombre,
+        ROW_NUMBER() OVER (ORDER BY idConsorcio) AS rn
+    INTO #ConsorciosAProcesar
+    FROM consorcio.consorcio
+    WHERE fechaBaja IS NULL;
+
+    DECLARE @i INT = 1;
+    DECLARE @max INT = (SELECT COUNT(*) FROM #ConsorciosAProcesar);
+    DECLARE @idConsorcioActual INT;
+    DECLARE @nombreConsorcio VARCHAR(50);
+    DECLARE @Msg NVARCHAR(500);
+
+    -- 3. Bucle por cada consorcio
+    WHILE @i <= @max
+    BEGIN
+        SELECT 
+            @idConsorcioActual = idConsorcio,
+            @nombreConsorcio = nombre
+        FROM #ConsorciosAProcesar
+        WHERE rn = @i;
+
+        SET @Msg = N'--- Procesando Consorcio ' + CAST(@idConsorcioActual AS VARCHAR) + ' (' + @nombreConsorcio + ') ---';
+        PRINT @Msg;
+
+        BEGIN TRY
+            EXEC consorcio.sp_OrquestarFlujoFacturacionMensual 
+                @idConsorcio = @idConsorcioActual,
+                @periodoExpensa = @periodoExpensa, 
+                @anioExpensa = @anioExpensa, 
+                @fechaEmision = @fechaEmision,
+                @fechaPrimerVenc = @fechaPrimerVenc, 
+                @fechaSegundoVenc = @fechaSegundoVenc;
+        END TRY
+        BEGIN CATCH
+            -- Si un consorcio falla, lo informa y continua
+            SET @Msg = N'ERROR: Falló el procesamiento del Consorcio ' + CAST(@idConsorcioActual AS VARCHAR) + '. Error: ' + ERROR_MESSAGE();
+            PRINT @Msg;
+        END CATCH
+
+        SET @i = @i + 1;
+    END
+
+    DROP TABLE #ConsorciosAProcesar;
+    PRINT N'================================================================================';
+    PRINT N'ORQUESTADOR GENERAL FINALIZADO.';
+    PRINT N'================================================================================';
+END;
+GO
