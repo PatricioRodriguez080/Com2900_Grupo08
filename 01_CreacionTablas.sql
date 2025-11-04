@@ -158,8 +158,7 @@ CREATE TABLE consorcio.detalle_expensa (
     CONSTRAINT chk_detalleExpensa_pagoRecibidos CHECK (pagoRecibido >= 0),
     CONSTRAINT chk_detalleExpensa_interesPorMora CHECK (interesPorMora >= 0),
     CONSTRAINT chk_detalleExpensa_expensasOrdinarias CHECK (expensasOrdinarias >= 0),
-    CONSTRAINT chk_detalleExpensa_expensasExtraOrdinarias CHECK (expensasExtraOrdinarias >= 0),
-    CONSTRAINT chk_detalleExpensa_totalAPagar CHECK (totalAPagar >= 0)
+    CONSTRAINT chk_detalleExpensa_expensasExtraOrdinarias CHECK (expensasExtraOrdinarias >= 0)
 );
 
 CREATE TABLE consorcio.pago(
