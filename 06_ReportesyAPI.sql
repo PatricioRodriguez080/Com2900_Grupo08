@@ -346,8 +346,58 @@ BEGIN
 END;
 GO
 
-
 EXEC consorcio.SP_reporte_4
     @FechaInicio = '2025-04-01',
     @FechaFin = '2025-06-30';
 GO
+
+--------------------------------------------------------------------------------
+-- REPORTE 6
+-- Fechas de pagos de expensas ordinarias de cada UF y la cantidad de días que
+-- pasan entre un pago y el siguiente, para el conjunto examinado
+--------------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE consorcio.SP_reporte_6
+    @idConsorcio INT,
+    @FechaDesde DATE = NULL,
+    @FechaHasta DATE = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    WITH PagosOrdenados AS (
+        SELECT
+            c.nombre AS Consorcio,
+            uf.piso,
+            uf.departamento,
+            p.fecha AS FechaPago,
+            LAG(p.fecha, 1, NULL) OVER (PARTITION BY uf.idUnidadFuncional ORDER BY p.fecha) AS FechaPagoAnterior
+        FROM
+            consorcio.pago AS p JOIN consorcio.detalle_expensa AS de ON p.idDetalleExpensa = de.idDetalleExpensa
+            JOIN consorcio.unidad_funcional AS uf ON de.idUnidadFuncional = uf.idUnidadFuncional
+            JOIN consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio
+        WHERE
+            c.idConsorcio = @idConsorcio
+            AND de.expensasOrdinarias > 0
+            AND (@FechaDesde IS NULL OR p.fecha >= @FechaDesde)
+            AND (@FechaHasta IS NULL OR p.fecha <= @FechaHasta)
+    )
+    SELECT
+        Consorcio,
+        piso,
+        departamento,
+        FechaPagoAnterior,
+        FechaPago AS FechaPagoSiguiente,
+        
+        DATEDIFF(DAY, FechaPagoAnterior, FechaPago) AS DiasEntrePagos
+    FROM
+        PagosOrdenados
+    ORDER BY
+        piso, 
+        departamento, 
+        FechaPagoSiguiente;
+
+END;
+GO
+
+EXEC consorcio.SP_reporte_6
+    @idConsorcio = 1
