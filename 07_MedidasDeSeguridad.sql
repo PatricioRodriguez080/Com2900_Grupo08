@@ -49,8 +49,6 @@ GRANT SELECT ON consorcio.expensa TO [Sistemas];
 GRANT SELECT ON consorcio.detalle_expensa TO [Sistemas];
 GO
 
-USE master;
-GO
 
 --- Creación usuarios Administrativo General ---
 -- LUCAS
@@ -121,3 +119,20 @@ CREATE LOGIN login_bruno_sys WITH PASSWORD = 'ñG7$Qw!5Xp2#', CHECK_POLICY = ON;
 CREATE USER user_bruno_sys FOR LOGIN login_bruno_sys;
 ALTER ROLE [Sistemas] ADD MEMBER user_bruno_sys;
 GO
+
+USE Com2900G08;
+GO
+
+/* SELECT 
+    name AS NombreUsuario,
+    type_desc AS Tipo,
+    create_date AS FechaCreacion,
+    sid AS SID,
+    default_schema_name AS EsquemaPorDefecto
+FROM 
+    sys.database_principals
+WHERE 
+    type IN ('S', 'U', 'G')
+    AND name NOT IN ('public', 'guest', 'INFORMATION_SCHEMA', 'sys', 'dbo');
+GO
+/*
