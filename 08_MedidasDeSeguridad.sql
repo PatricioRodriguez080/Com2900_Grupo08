@@ -49,6 +49,7 @@ GRANT SELECT ON consorcio.expensa TO [Sistemas];
 GRANT SELECT ON consorcio.detalle_expensa TO [Sistemas];
 GO
 
+-- FIRST LOGIN ---- *** AÑADIR *****
 
 --- Creación usuarios Administrativo General ---
 -- LUCAS
@@ -210,16 +211,6 @@ GO
 -- PRUEBA DE ÉXITO: SELECT en Reportes (expensa)
 -- Resultado Esperado: Muestra datos.
 SELECT TOP 1 periodo, anio, idConsorcio FROM consorcio.expensa;
-GO
-
--- PRUEBA DE ÉXITO: UPDATE en Actualización UF (unidad_funcional)
--- Resultado Esperado: Ejecución Exitosa. (Usamos una transacción para revertir el cambio).
-BEGIN TRANSACTION;
-    UPDATE consorcio.unidad_funcional 
-    SET coeficiente = 0.45 
-    WHERE idUnidadFuncional = 1;
-    -- Se verá una fila afectada, pero se revierte.
-ROLLBACK TRANSACTION;
 GO
 
 -- PRUEBA DE FALLO: INSERT en Pagos (pago)
