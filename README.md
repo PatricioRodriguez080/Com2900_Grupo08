@@ -19,6 +19,7 @@ El equipo de desarrollo ha adoptado las siguientes convenciones de nomenclatura 
 | **Store Procedures (SP)** | `snake_case` (minúsculas y guion bajo) | Descriptivo de la acción a realizar y prefijo SP. | `sp_calcular_morosidad` |
 | **Columnas (Atributos)** | `camelCase` | Descriptivo. | `saldoAnterior`, `nroFactura` |
 | **Variables/Parámetros** | `camelCase` | Descriptivo. | `@montoTotal`, `@idConsorcio` |
+| **Índices** | `snake_case` (minúsculas y guion bajo) | Descriptivo y prefijo IDX con continuacion de tabla y campos incluidos. | `IDX_tabla_campos`, `IDX_pago_cuenta_fecha` |
 
 
 # Uso de SQL Dinámico y Justificación
