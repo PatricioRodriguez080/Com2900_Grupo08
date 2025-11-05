@@ -77,6 +77,7 @@ SELECT * FROM consorcio.pago;
 -- NUMERO: 6
 -- ARCHIVO: Servicios.Servicios.json
 -- PROCEDIMIENTO: Importar expensas y gastos
+-- CONSIDERACIONES: Gasto ordinario es creado sin los datos de la empresa (son cargados en el numero 8)
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_carga_expensas @path = 'C:\Archivos para el TP\Servicios.Servicios.json'
 
