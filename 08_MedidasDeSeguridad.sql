@@ -53,70 +53,70 @@ GO
 
 --- Creación usuarios Administrativo General ---
 -- LUCAS
-CREATE LOGIN login_lucas WITH PASSWORD = '4ñ#kZp1@G7X!', CHECK_POLICY = ON;
+CREATE LOGIN login_lucas WITH PASSWORD = '4ñ#kZp1@G7X!', CHECK_POLICY = ON, MUST_CHANGE;
 CREATE USER user_lucas FOR LOGIN login_lucas;
 ALTER ROLE [Administrativo general] ADD MEMBER user_lucas;
 GO
 
 -- JUAN
-CREATE LOGIN login_juan WITH PASSWORD = '9$ñHw2pY!tJ7', CHECK_POLICY = ON;
+CREATE LOGIN login_juan WITH PASSWORD = '9$ñHw2pY!tJ7', CHECK_POLICY = ON, MUST_CHANGE;
 CREATE USER user_juan FOR LOGIN login_juan;
 ALTER ROLE [Administrativo general] ADD MEMBER user_juan;
 GO
 
 -- PEDRO
-CREATE LOGIN login_pedro WITH PASSWORD = 'B!xñM8@cQ02$', CHECK_POLICY = ON;
+CREATE LOGIN login_pedro WITH PASSWORD = 'B!xñM8@cQ02$', CHECK_POLICY = ON, MUST_CHANGE;
 CREATE USER user_pedro FOR LOGIN login_pedro;
 ALTER ROLE [Administrativo general] ADD MEMBER user_pedro;
 GO
 
 --- Creación usuarios Administrativo Bancario ---
 -- AXEL
-CREATE LOGIN login_axel WITH PASSWORD = 'S8q#ñLz!7E3W', CHECK_POLICY = ON;
+CREATE LOGIN login_axel WITH PASSWORD = 'S8q#ñLz!7E3W', CHECK_POLICY = ON, MUST_CHANGE;
 CREATE USER user_axel FOR LOGIN login_axel;
 ALTER ROLE [Administrativo Bancario] ADD MEMBER user_axel;
 GO
 
 -- MARIA
-CREATE LOGIN login_maria WITH PASSWORD = 'A7ñ$Rk@49Qx!', CHECK_POLICY = ON;
+CREATE LOGIN login_maria WITH PASSWORD = 'A7ñ$Rk@49Qx!', CHECK_POLICY = ON, MUST_CHANGE;
 CREATE USER user_maria FOR LOGIN login_maria;
 ALTER ROLE [Administrativo Bancario] ADD MEMBER user_maria;
 GO
 
 -- MARTINA
-CREATE LOGIN login_martina WITH PASSWORD = '5M!ñPz@1Jk4D', CHECK_POLICY = ON;
+CREATE LOGIN login_martina WITH PASSWORD = '5M!ñPz@1Jk4D', CHECK_POLICY = ON, MUST_CHANGE;
 CREATE USER user_martina FOR LOGIN login_martina;
 ALTER ROLE [Administrativo Bancario] ADD MEMBER user_martina;
 GO
 
 --- Creación usuarios Administrativo Operativo ---
 -- CAMILA
-CREATE LOGIN login_camila WITH PASSWORD = 'ñ2X!g9$T@bL4', CHECK_POLICY = ON;
+CREATE LOGIN login_camila WITH PASSWORD = 'ñ2X!g9$T@bL4', CHECK_POLICY = ON, MUST_CHANGE;
 CREATE USER user_camila FOR LOGIN login_camila;
 ALTER ROLE [Administrativo operativo] ADD MEMBER user_camila;
 GO
 
 -- PILAR
-CREATE LOGIN login_pilar WITH PASSWORD = 'Qñ7@v3!T#cZ1', CHECK_POLICY = ON;
+CREATE LOGIN login_pilar WITH PASSWORD = 'Qñ7@v3!T#cZ1', CHECK_POLICY = ON, MUST_CHANGE;
 CREATE USER user_pilar FOR LOGIN login_pilar;
 ALTER ROLE [Administrativo operativo] ADD MEMBER user_pilar;
 GO
 
 -- SOFIA
-CREATE LOGIN login_sofia WITH PASSWORD = '1P!ñY5@G8jH$s', CHECK_POLICY = ON;
+CREATE LOGIN login_sofia WITH PASSWORD = '1P!ñY5@G8jH$s', CHECK_POLICY = ON, MUST_CHANGE;
 CREATE USER user_sofia FOR LOGIN login_sofia;
 ALTER ROLE [Administrativo operativo] ADD MEMBER user_sofia;
 GO
 
 --- Creación usuarios Sistemas ---
 -- ALAN
-CREATE LOGIN login_alan_sys WITH PASSWORD = 'Zñ3@Hk!8Tq9$', CHECK_POLICY = ON;
+CREATE LOGIN login_alan_sys WITH PASSWORD = 'Zñ3@Hk!8Tq9$', CHECK_POLICY = ON, MUST_CHANGE;
 CREATE USER user_alan_sys FOR LOGIN login_alan_sys;
 ALTER ROLE [Sistemas] ADD MEMBER user_alan_sys;
 GO
 
 -- BRUNO
-CREATE LOGIN login_bruno_sys WITH PASSWORD = 'ñG7$Qw!5Xp2#', CHECK_POLICY = ON;
+CREATE LOGIN login_bruno_sys WITH PASSWORD = 'ñG7$Qw!5Xp2#', CHECK_POLICY = ON, MUST_CHANGE;
 CREATE USER user_bruno_sys FOR LOGIN login_bruno_sys;
 ALTER ROLE [Sistemas] ADD MEMBER user_bruno_sys;
 GO
