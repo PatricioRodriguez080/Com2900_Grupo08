@@ -19,8 +19,10 @@ Enunciado:        "05 - Ejecución de Procedimientos Almacenados"
 -- PROCEDIMIENTO: Importar consorcios
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_importar_consorcios_excel @path = 'C:\Archivos para el TP\datos varios.xlsx';
+GO
 
 SELECT * FROM consorcio.consorcio;
+GO
 
 --------------------------------------------------------------------------------
 -- NUMERO: 2
@@ -29,10 +31,12 @@ SELECT * FROM consorcio.consorcio;
 -- CONSIDERACIONES: Sin cuenta origen asociada (se carga en el siguiente)
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_importar_unidades_funcionales @path = 'C:\Archivos para el TP\UF por consorcio.txt';
+GO
 
 SELECT * FROM consorcio.unidad_funcional;
 SELECT * FROM consorcio.baulera;
 SELECT * FROM consorcio.cochera;
+GO
 
 --------------------------------------------------------------------------------
 -- NUMERO: 3
@@ -40,8 +44,10 @@ SELECT * FROM consorcio.cochera;
 -- PROCEDIMIENTO: Importar cuentas origen para las UF ya creadas
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_importar_unidades_funcionales_csv @path = 'C:\Archivos para el TP\Inquilino-propietarios-UF.csv';
+GO
 
 SELECT * FROM consorcio.unidad_funcional;
+GO
 
 SELECT
     uf.cuentaOrigen,
@@ -53,6 +59,7 @@ FROM
     consorcio.unidad_funcional AS uf
 JOIN
     consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio;
+GO
 
 --------------------------------------------------------------------------------
 -- NUMERO: 4
@@ -60,9 +67,11 @@ JOIN
 -- PROCEDIMIENTO: Importar personas y su relacion con las unidades funcionales (persona_unidad_funcional)
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_importar_personas @path = 'C:\Archivos para el TP\Inquilino-propietarios-datos.csv';
+GO
 
 SELECT * FROM consorcio.persona;
 SELECT * FROM consorcio.persona_unidad_funcional;
+GO
 
 --------------------------------------------------------------------------------
 -- NUMERO: 5
@@ -70,8 +79,10 @@ SELECT * FROM consorcio.persona_unidad_funcional;
 -- PROCEDIMIENTO: Importar pagos
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_carga_pagos @path = 'C:\Archivos para el TP\pagos_consorcios.csv';
+GO
 
 SELECT * FROM consorcio.pago;
+GO
 
 --------------------------------------------------------------------------------
 -- NUMERO: 6
@@ -80,10 +91,12 @@ SELECT * FROM consorcio.pago;
 -- CONSIDERACIONES: Gasto ordinario es creado sin los datos de la empresa (son cargados en el numero 8)
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_carga_expensas @path = 'C:\Archivos para el TP\Servicios.Servicios.json'
+GO
 
 SELECT * FROM consorcio.expensa;
 SELECT * FROM consorcio.gasto;
 SELECT * FROM consorcio.gasto_ordinario;
+GO
 
 --------------------------------------------------------------------------------
 -- NUMERO: 7
@@ -91,8 +104,10 @@ SELECT * FROM consorcio.gasto_ordinario;
 -- PROCEDIMIENTO: Importar Proveedores
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_importar_proveedores_excel @path = 'C:\Archivos para el TP\datos varios.xlsx';
+GO
 
 SELECT * FROM consorcio.proveedor
+GO
 
 --------------------------------------------------------------------------------
 -- NUMERO: 8
@@ -100,8 +115,10 @@ SELECT * FROM consorcio.proveedor
 -- PROCEDIMIENTO: Actualizacion de tabla gasto_ordinario con los datos de los proveedores
 --------------------------------------------------------------------------------
 EXEC consorcio.sp_procesa_actualizacion_gastos;
+GO
 
 SELECT * FROM consorcio.gasto_ordinario;
+GO
 
 SELECT 
     go.*, 
@@ -114,13 +131,13 @@ INNER JOIN
     consorcio.expensa AS e ON g.idExpensa = e.idExpensa
 ORDER BY 
     go.idGastoOrd;
+GO
 
 --------------------------------------------------------------------------------
 -- NUMERO: 9
 -- ARCHIVO: -
 -- PROCEDIMIENTO: Actualizacion de tabla gasto_extraOrdinario
 --------------------------------------------------------------------------------
-
 EXEC consorcio.sp_crearGastosExtraordinariosJunio;
 GO
 
@@ -145,6 +162,7 @@ INNER JOIN
     consorcio.consorcio C ON E.idConsorcio = C.idConsorcio
 WHERE
     E.periodo = 'junio' AND E.anio = 2025;
+GO
 
 --------------------------------------------------------------------------------
 -- NUMERO: 10
@@ -180,6 +198,7 @@ GO
 
 SELECT * FROM consorcio.detalle_expensa
 SELECT * FROM consorcio.pago
+GO
 
 --------------------------------------------------------------------------------
 -- NUMERO: 11
@@ -187,8 +206,10 @@ SELECT * FROM consorcio.pago
 -- PROCEDIMIENTO: Insercion de datos a la tabla estado_financiero
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_cargar_estado_financiero;
+GO
 
 SELECT * FROM consorcio.estado_financiero;
+GO
 
 --------------------------------------------------------------------------------
 -- NUMERO: 12
