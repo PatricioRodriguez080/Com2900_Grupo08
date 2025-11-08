@@ -13,6 +13,10 @@ Enunciado:        "05 - Ejecución de Procedimientos Almacenados"
 ================================================================================
 */
 -- Todos los archivos utilizados se encontrarán en "C:\Archivos para el TP" ----
+
+USE Com2900G08;
+GO
+
 --------------------------------------------------------------------------------
 -- NUMERO: 1
 -- ARCHIVO: datos varios.xlsx

@@ -13,6 +13,8 @@ Enunciado:        "02 - Creación de indices"
 ===============================================================================
 */
 
+USE Com2900G08;
+GO
 
 CREATE NONCLUSTERED INDEX idx_expensa_filtro_periodo
 ON consorcio.expensa (idConsorcio, anio, periodo)

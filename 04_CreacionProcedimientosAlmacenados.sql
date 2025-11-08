@@ -13,6 +13,8 @@ Enunciado:        "04 - Creación de Procedimientos Almacenados"
 ================================================================================
 */
 
+USE Com2900G08;
+GO
 
 --------------------------------------------------------------------------------
 -- NUMERO: 1
@@ -21,8 +23,6 @@ Enunciado:        "04 - Creación de Procedimientos Almacenados"
 --------------------------------------------------------------------------------
 
 -- Enable Ad Hoc Distributed Queries
-
-
 -- Set provider properties for Microsoft.ACE.OLEDB.12.0
 -- EXEC sp_MSset_oledb_prop N'Microsoft.ACE.OLEDB.12.0', N'AllowInProcess', 1;
 -- EXEC sp_MSset_oledb_prop N'Microsoft.ACE.OLEDB.12.0', N'DynamicParameters', 1;
