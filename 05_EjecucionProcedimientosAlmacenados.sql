@@ -174,7 +174,7 @@ GO
 -- PROCEDIMIENTO: Generar detalles de expensas de Abril, Mayo y Junio
 --------------------------------------------------------------------------------
 -- Abril
-EXEC consorcio.sp_OrquestarFlujoParaTodosLosConsorcios 
+EXEC consorcio.sp_orquestarFlujoParaTodosLosConsorcios 
     @periodoExpensa = 'abril', 
     @anioExpensa = 2025,
     @fechaEmision = '2025-05-05',
@@ -183,7 +183,7 @@ EXEC consorcio.sp_OrquestarFlujoParaTodosLosConsorcios
 GO
 
 --Mayo
-EXEC consorcio.sp_OrquestarFlujoParaTodosLosConsorcios 
+EXEC consorcio.sp_orquestarFlujoParaTodosLosConsorcios 
     @periodoExpensa = 'mayo', 
     @anioExpensa = 2025,
     @fechaEmision = '2025-06-05',
@@ -192,7 +192,7 @@ EXEC consorcio.sp_OrquestarFlujoParaTodosLosConsorcios
 GO
 
 --Junio
-EXEC consorcio.sp_OrquestarFlujoParaTodosLosConsorcios 
+EXEC consorcio.sp_orquestarFlujoParaTodosLosConsorcios 
     @periodoExpensa = 'junio', 
     @anioExpensa = 2025,
     @fechaEmision = '2025-07-05',
@@ -223,6 +223,10 @@ GO
 EXEC consorcio.SP_migrarEsquemaACifradoReversible 
     @FraseClave = 'Migradoantihackers';
 GO
+
+SELECT * FROM consorcio.persona;
+SELECT * FROM consorcio.unidad_funcional;
+SELECT * FROM consorcio.pago;
 
 --------------------------------------------------------------------------------
 -- NUMERO: 13

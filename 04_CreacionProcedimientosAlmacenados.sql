@@ -1366,7 +1366,7 @@ source:
 END;
 GO
 
-CREATE OR ALTER PROCEDURE consorcio.sp_AsociarPagosConsumidos
+CREATE OR ALTER PROCEDURE consorcio.sp_asociarPagosConsumidos
     @idConsorcio INT,
     @periodo VARCHAR(12),
     @anio INT
@@ -1470,7 +1470,7 @@ BEGIN
 END;
 GO
 
-CREATE OR ALTER PROCEDURE consorcio.sp_OrquestarFlujoFacturacionMensual
+CREATE OR ALTER PROCEDURE consorcio.sp_orquestarFlujoFacturacionMensual
     @idConsorcio INT,
     @periodoExpensa VARCHAR(12),
     @anioExpensa INT,
@@ -1530,11 +1530,11 @@ BEGIN
         EXEC consorcio.sp_asociarPagosAUF;
 
         --CONSUMIR PAGOS (Vincular Pagos a la Factura del mismo período)
-        SET @Msg = N'3. Ejecutando sp_AsociarPagosConsumidos (Consumo/Vinculación de Pagos)...';
+        SET @Msg = N'3. Ejecutando sp_asociarPagosConsumidos (Consumo/Vinculación de Pagos)...';
         PRINT @Msg;
 
         -- Este SP requiere el periodo para filtrar los pagos por fecha de Abril y asociarlos a la factura de Abril.
-        EXEC consorcio.sp_AsociarPagosConsumidos
+        EXEC consorcio.sp_asociarPagosConsumidos
             @idConsorcio = @idConsorcio,
             @periodo = @periodoExpensa,
             @anio = @anioExpensa;
@@ -1556,7 +1556,7 @@ BEGIN
 END;
 GO
 
-CREATE OR ALTER PROCEDURE consorcio.sp_OrquestarFlujoParaTodosLosConsorcios
+CREATE OR ALTER PROCEDURE consorcio.sp_orquestarFlujoParaTodosLosConsorcios
     @periodoExpensa VARCHAR(12),
     @anioExpensa INT,
     @fechaEmision DATE,
@@ -1600,7 +1600,7 @@ BEGIN
         PRINT @Msg;
 
         BEGIN TRY
-            EXEC consorcio.sp_OrquestarFlujoFacturacionMensual 
+            EXEC consorcio.sp_orquestarFlujoFacturacionMensual 
                 @idConsorcio = @idConsorcioActual,
                 @periodoExpensa = @periodoExpensa, 
                 @anioExpensa = @anioExpensa, 
