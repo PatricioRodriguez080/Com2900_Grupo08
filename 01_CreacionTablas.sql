@@ -51,7 +51,7 @@ CREATE TABLE consorcio.estado_financiero (
 CREATE TABLE consorcio.unidad_funcional (
 	idUnidadFuncional INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
 	idConsorcio INT NOT NULL,
-	cuentaOrigen VARCHAR(22) NOT NULL,
+	cuentaOrigen CHAR(22) NOT NULL,
 	numeroUnidadFuncional INT NOT NULL,
 	piso CHAR (2) NOT NULL,
     departamento CHAR (1) NOT NULL,

@@ -25,9 +25,6 @@ GO
 EXEC consorcio.SP_importar_consorcios_excel @path = 'C:\Archivos para el TP\datos varios.xlsx';
 GO
 
-SELECT * FROM consorcio.consorcio;
-GO
-
 --------------------------------------------------------------------------------
 -- NUMERO: 2
 -- ARCHIVO: UF por consorcio.txt
@@ -35,11 +32,6 @@ GO
 -- CONSIDERACIONES: Sin cuenta origen asociada (se carga en el siguiente)
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_importar_unidades_funcionales @path = 'C:\Archivos para el TP\UF por consorcio.txt';
-GO
-
-SELECT * FROM consorcio.unidad_funcional;
-SELECT * FROM consorcio.baulera;
-SELECT * FROM consorcio.cochera;
 GO
 
 --------------------------------------------------------------------------------
@@ -50,21 +42,6 @@ GO
 EXEC consorcio.SP_importar_unidades_funcionales_csv @path = 'C:\Archivos para el TP\Inquilino-propietarios-UF.csv';
 GO
 
-SELECT * FROM consorcio.unidad_funcional;
-GO
-
-SELECT
-    uf.cuentaOrigen,
-    c.nombre AS nombre_consorcio,
-    uf.numeroUnidadFuncional,
-    uf.piso,
-    uf.departamento
-FROM
-    consorcio.unidad_funcional AS uf
-JOIN
-    consorcio.consorcio AS c ON uf.idConsorcio = c.idConsorcio;
-GO
-
 --------------------------------------------------------------------------------
 -- NUMERO: 4
 -- ARCHIVO: inquilino-propietarios-datos.csv
@@ -73,19 +50,12 @@ GO
 EXEC consorcio.SP_importar_personas @path = 'C:\Archivos para el TP\Inquilino-propietarios-datos.csv';
 GO
 
-SELECT * FROM consorcio.persona;
-SELECT * FROM consorcio.persona_unidad_funcional;
-GO
-
 --------------------------------------------------------------------------------
 -- NUMERO: 5
 -- ARCHIVO: pagos_consorcios.csv
 -- PROCEDIMIENTO: Importar pagos
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_carga_pagos @path = 'C:\Archivos para el TP\pagos_consorcios.csv';
-GO
-
-SELECT * FROM consorcio.pago;
 GO
 
 --------------------------------------------------------------------------------
@@ -97,20 +67,12 @@ GO
 EXEC consorcio.SP_carga_expensas @path = 'C:\Archivos para el TP\Servicios.Servicios.json'
 GO
 
-SELECT * FROM consorcio.expensa;
-SELECT * FROM consorcio.gasto;
-SELECT * FROM consorcio.gasto_ordinario;
-GO
-
 --------------------------------------------------------------------------------
 -- NUMERO: 7
 -- ARCHIVO: datos varios.xlsx
 -- PROCEDIMIENTO: Importar Proveedores
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_importar_proveedores_excel @path = 'C:\Archivos para el TP\datos varios.xlsx';
-GO
-
-SELECT * FROM consorcio.proveedor
 GO
 
 --------------------------------------------------------------------------------
@@ -121,51 +83,12 @@ GO
 EXEC consorcio.sp_procesa_actualizacion_gastos;
 GO
 
-SELECT * FROM consorcio.gasto_ordinario;
-GO
-
-SELECT 
-    go.*, 
-    e.idConsorcio
-FROM 
-    consorcio.gasto_ordinario AS go
-INNER JOIN 
-    consorcio.gasto AS g ON go.idGasto = g.idGasto
-INNER JOIN 
-    consorcio.expensa AS e ON g.idExpensa = e.idExpensa
-ORDER BY 
-    go.idGastoOrd;
-GO
-
 --------------------------------------------------------------------------------
 -- NUMERO: 9
 -- ARCHIVO: -
 -- PROCEDIMIENTO: Actualizacion de tabla gasto_extraOrdinario
 --------------------------------------------------------------------------------
 EXEC consorcio.sp_crearGastosExtraordinariosJunio;
-GO
-
-SELECT
-    E.idExpensa,
-    C.nombre AS Consorcio,
-    E.periodo,
-    GXO.nroCuota,
-    GXO.totalCuotas,
-    GXO.nomEmpresa,
-    GXO.nroFactura,
-    GXO.importe AS ImporteCuota,
-    GXO.descripcion,
-    G.subTotalExtraOrd AS TotalExtraordinarioGasto
-FROM
-    consorcio.gasto_extra_ordinario GXO
-INNER JOIN
-    consorcio.gasto G ON GXO.idGasto = G.idGasto
-INNER JOIN
-    consorcio.expensa E ON G.idExpensa = E.idExpensa
-INNER JOIN
-    consorcio.consorcio C ON E.idConsorcio = C.idConsorcio
-WHERE
-    E.periodo = 'junio' AND E.anio = 2025;
 GO
 
 --------------------------------------------------------------------------------
@@ -177,31 +100,27 @@ GO
 EXEC consorcio.sp_orquestarFlujoParaTodosLosConsorcios 
     @periodoExpensa = 'abril', 
     @anioExpensa = 2025,
-    @fechaEmision = '2025-05-05',
-    @fechaPrimerVenc = '2025-05-10',
-    @fechaSegundoVenc = '2025-05-25';
+    @fechaEmision = '2025-04-05',
+    @fechaPrimerVenc = '2025-04-10',
+    @fechaSegundoVenc = '2025-04-25';
 GO
 
 --Mayo
 EXEC consorcio.sp_orquestarFlujoParaTodosLosConsorcios 
     @periodoExpensa = 'mayo', 
     @anioExpensa = 2025,
-    @fechaEmision = '2025-06-05',
-    @fechaPrimerVenc = '2025-06-10',
-    @fechaSegundoVenc = '2025-06-25';
+    @fechaEmision = '2025-05-05',
+    @fechaPrimerVenc = '2025-05-10',
+    @fechaSegundoVenc = '2025-05-25';
 GO
 
 --Junio
 EXEC consorcio.sp_orquestarFlujoParaTodosLosConsorcios 
     @periodoExpensa = 'junio', 
     @anioExpensa = 2025,
-    @fechaEmision = '2025-07-05',
-    @fechaPrimerVenc = '2025-07-10',
-    @fechaSegundoVenc = '2025-07-25';
-GO
-
-SELECT * FROM consorcio.detalle_expensa
-SELECT * FROM consorcio.pago
+    @fechaEmision = '2025-06-05',
+    @fechaPrimerVenc = '2025-06-10',
+    @fechaSegundoVenc = '2025-06-25';
 GO
 
 --------------------------------------------------------------------------------
@@ -212,9 +131,6 @@ GO
 EXEC consorcio.SP_cargar_estado_financiero;
 GO
 
-SELECT * FROM consorcio.estado_financiero;
-GO
-
 --------------------------------------------------------------------------------
 -- NUMERO: 12
 -- ARCHIVO: -
@@ -223,10 +139,6 @@ GO
 EXEC consorcio.SP_migrarEsquemaACifradoReversible 
     @FraseClave = 'Migradoantihackers';
 GO
-
-SELECT * FROM consorcio.persona;
-SELECT * FROM consorcio.unidad_funcional;
-SELECT * FROM consorcio.pago;
 
 --------------------------------------------------------------------------------
 -- NUMERO: 13
