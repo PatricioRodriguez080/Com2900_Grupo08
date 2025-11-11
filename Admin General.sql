@@ -15,7 +15,8 @@ USE Com2900G08
 GO
 PRINT '--- PRUEBAS: Administrativo general (user_lucas) ---';
 EXECUTE AS LOGIN = 'login_lucas';
-
+GO
+SELECT SUSER_NAME();
 
 -- PRUEBA DE ÉXITO: Actualización de Unidad Funcional (Tarea propia del rol)
 -- Resultado Esperado: Una fila afectada (el cambio se revierte).
