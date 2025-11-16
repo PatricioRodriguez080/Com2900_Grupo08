@@ -748,21 +748,21 @@ BEGIN
         RETURN -1;
     END
 
-    -- 2. validamos direccion
+    -- validamos direccion
     IF @direccion IS NOT NULL AND @direccion = ''
     BEGIN
         RAISERROR('Error: La direccion no puede ser una cadena vacia.', 16, 1);
         RETURN -2;
     END
 
-    -- 3. validamos la cant de UF
+    -- validamos la cant de UF
     IF @cantidadUnidadesFuncionales IS NOT NULL AND @cantidadUnidadesFuncionales <= 0
     BEGIN
         RAISERROR('Error: La cantidad de unidades funcionales debe ser mayor a 0.', 16, 1);
         RETURN -3;
     END
 
-    -- 4. validamos la cant de M2
+    -- validamos la cant de M2
     IF @metrosCuadradosTotales IS NOT NULL AND @metrosCuadradosTotales <= 0
     BEGIN
         RAISERROR('Error: Los metros cuadrados totales deben ser mayores a 0.', 16, 1);
@@ -936,7 +936,7 @@ GO
 --MODIFICAR ESTADO FINANCIERO
 -----------------------------
 CREATE OR ALTER PROCEDURE consorcio.sp_modificarEstadoFinanciero
-    @idEstadoFinanciero INT, -- id a modif
+    @idEstadoFinanciero INT, -- id a modificar
     @idConsorcio INT = NULL, 
     @periodo VARCHAR(12) = NULL,
     @anio INT = NULL,
@@ -956,7 +956,7 @@ BEGIN
         RETURN -1;
     END
 
-    -- Validamos que el nuevo consorcio (si se quiere modif) exista y este activo
+    -- Validamos que el nuevo consorcio (si se quiere modificar) exista y este activo
     IF @idConsorcio IS NOT NULL AND NOT EXISTS (SELECT 1 FROM consorcio.consorcio 
                                                 WHERE idConsorcio = @idConsorcio AND fechaBaja IS NULL)
     BEGIN
@@ -1275,7 +1275,7 @@ GO
 --INSERTAR COCHERA
 ------------------
 CREATE OR ALTER PROCEDURE consorcio.sp_insertarCochera
-    @idUnidadFuncional INT = NULL, --permite null xq puede haber concheras q tdvia no esten asignadas
+    @idUnidadFuncional INT = NULL, --permite null porque puede haber concheras q todavia no esten asignadas
     @metrosCuadrados INT,
     @coeficiente DECIMAL(5,2),
     @idCocheraCreada INT = NULL OUTPUT
@@ -1449,7 +1449,7 @@ GO
 --INSERTAR BAULERA
 ------------------
 CREATE OR ALTER PROCEDURE consorcio.sp_insertarBaulera
-    @idUnidadFuncional INT = NULL, -- Permite NULL
+    @idUnidadFuncional INT = NULL,
     @metrosCuadrados INT,
     @coeficiente DECIMAL(5,2),
     @idBauleraCreada INT = NULL OUTPUT
@@ -2032,7 +2032,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- 1. valido q el detalle exista
+    -- validamos q el detalle exista
     IF NOT EXISTS (SELECT 1 FROM consorcio.detalle_expensa WHERE idDetalleExpensa = @idDetalleExpensa)
     BEGIN
         RAISERROR('Error: El detalle de expensa ID %d no existe. No se puede eliminar.', 16, 1, @idDetalleExpensa);
@@ -2138,7 +2138,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- valido q exista el gasto
+    -- validamos q exista el gasto
     DECLARE @currentIdExpensa INT;
     
     SELECT @currentIdExpensa = idExpensa 

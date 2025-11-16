@@ -448,11 +448,10 @@ BEGIN
         EXEC sp_executesql @sqlBulkInsert;
 
         --------------------------------------------------
-        -- 3. INSERTAR NUEVAS PERSONAS en consorcio.persona (Basado en Conjuntos)
+        -- 3. INSERTAR NUEVAS PERSONAS en consorcio.persona
         --------------------------------------------------
         WITH DatosLimpios AS (
             SELECT  
-                -- Lógica compleja de Title Case y limpieza de caracteres especiales (si es necesario mantenerla)
                 RTRIM(
                     (
                         SELECT  
@@ -523,7 +522,7 @@ BEGIN
             );
 
         --------------------------------------------------
-        -- 4. INSERTAR RELACIONES en consorcio.persona_unidad_funcional (Basado en Conjuntos)
+        -- 4. INSERTAR RELACIONES en consorcio.persona_unidad_funcional
         --------------------------------------------------
         INSERT INTO consorcio.persona_unidad_funcional (idPersona, idUnidadFuncional, rol)
         SELECT
@@ -667,7 +666,7 @@ BEGIN
                 @fecha DATE,
                 @cuentaOrigen CHAR(22),
                 @importe DECIMAL(13,3),
-                @estaAsociado BIT = 0; -- por default 0
+                @estaAsociado BIT = 0;
 
         SELECT 
             @idPago = CAST(stg_idPago AS INT),
@@ -1008,10 +1007,10 @@ BEGIN
             
             -- Cálculo de subTipoGasto_nuevo
             CASE 
-                -- PRIORIDAD 1: Extracción del subtipo si el proveedor tiene ' - '
+                -- Extracción del subtipo si el proveedor tiene ' - '
                 WHEN CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
                     TRIM(SUBSTRING(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) + 3, LEN(p.nomEmpresa)))
-                -- PRIORIDAD 2: Mapeo Simple
+                -- Mapeo Simple
                 WHEN LOWER(go.tipoGasto) = 'administracion' THEN 'Honorarios'
                 WHEN LOWER(go.tipoGasto) = 'limpieza' THEN 'Servicio General'
                 WHEN LOWER(go.tipoGasto) = 'generales' THEN 'Varios'
@@ -1020,13 +1019,13 @@ BEGIN
             
             -- Calculo de nomEmpresa_nuevo
             CASE 
-                -- PRIORIDAD 1: Fragmentación del proveedor (toma el nombre antes del ' - ')
+                -- Fragmentación del proveedor (toma el nombre antes del ' - ')
                 WHEN p.nomEmpresa IS NOT NULL AND CHARINDEX(' - ', p.nomEmpresa) > 0 THEN
                     CAST(TRIM(LEFT(p.nomEmpresa, CHARINDEX(' - ', p.nomEmpresa) - 1)) AS VARCHAR(40))
-                -- PRIORIDAD 2: Uso del nombre completo del proveedor (si existe)
+                -- Uso del nombre completo del proveedor (si existe)
                 WHEN p.nomEmpresa IS NOT NULL THEN
                     CAST(TRIM(p.nomEmpresa) AS VARCHAR(40))
-                -- PRIORIDAD 3: RESCATE para 'administracion'
+                -- RESCATE para 'administracion'
                 WHEN LOWER(go.tipoGasto) = 'administracion' THEN 
                     CAST(go.nomEmpresa AS VARCHAR(40)) 
                 ELSE
@@ -1151,21 +1150,20 @@ BEGIN
 
         DECLARE @PagosAsociados INT = 0;
 
-        -- Actualizamos (UPDATE) la tabla 'pago' uniéndola (JOIN) con 'unidad_funcional'
+        -- Actualizamos la tabla 'pago' uniéndola con 'unidad_funcional'
         UPDATE P
         SET
-            P.estaAsociado = 1 -- (Los marcamos como asociados)
+            P.estaAsociado = 1 
         FROM
             consorcio.pago AS P
         JOIN
             consorcio.unidad_funcional AS UF
-            ON P.cuentaOrigen = UF.cuentaOrigen -- (El "match" por CBU/CVU)
+            ON P.cuentaOrigen = UF.cuentaOrigen 
         WHERE
             P.estaAsociado = 0 
             AND UF.fechaBaja IS NULL       
             AND P.idDetalleExpensa IS NULL;
 
-        -- Capturamos cuántas filas se actualizaron
         SET @PagosAsociados = @@ROWCOUNT;
 
         COMMIT TRANSACTION;
@@ -1199,8 +1197,8 @@ BEGIN
     SET XACT_ABORT ON;
 
     -- Declaración de tasas de interés y variables
-    DECLARE @TasaMoraMenor DECIMAL(5,2) = 0.02; -- 2%
-    DECLARE @TasaMoraMayor DECIMAL(5,2) = 0.05; -- 5%
+    DECLARE @TasaMoraMenor DECIMAL(5,2) = 0.02;
+    DECLARE @TasaMoraMayor DECIMAL(5,2) = 0.05;
     DECLARE @mes INT;
     DECLARE @periodo_norm VARCHAR(12);
 
@@ -1239,12 +1237,12 @@ BEGIN
             RETURN -11;
         END;
 
-        -- NO VOLVER A GENERAR SI YA EXISTEN (Importante para corridas de prueba)
+        -- NO VOLVER A GENERAR SI YA EXISTEN
         IF EXISTS (SELECT 1 FROM consorcio.detalle_expensa WHERE idExpensa = @idExpensa)
       	BEGIN
         	PRINT 'Advertencia: Las facturas para este cierre (idExpensa=' + CAST(@idExpensa AS VARCHAR(10)) + ') ya existen. No se generó nada nuevo.';
-        	COMMIT TRANSACTION; -- Confirmamos la transacción (no hacer nada es un éxito)
-        	RETURN 0; -- Salimos limpiamente
+        	COMMIT TRANSACTION;
+        	RETURN 0;
       	END;
 
         -- Totales de gastos del mes actual
@@ -1368,7 +1366,6 @@ BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
     
-    -- Variables
     DECLARE @idExpensaAConciliar INT;
     DECLARE @mes INT;
     DECLARE @periodo_norm VARCHAR(12) = LOWER(LTRIM(RTRIM(@periodo)));
@@ -1421,7 +1418,7 @@ BEGIN
         JOIN consorcio.unidad_funcional uf ON p.cuentaOrigen = uf.cuentaOrigen
         WHERE p.estaAsociado = 1 
           AND p.idDetalleExpensa IS NULL
-          AND p.fecha BETWEEN @fechaInicioPeriodo AND @fechaFinPeriodo; -- Filtro por fecha estricto
+          AND p.fecha BETWEEN @fechaInicioPeriodo AND @fechaFinPeriodo;
         
         -- Si no hay pagos para ese mes y consorcio, salimos
         IF NOT EXISTS (SELECT 1 FROM #PagosMapeados)
@@ -1430,22 +1427,18 @@ BEGIN
             COMMIT TRANSACTION;
             RETURN 0;
         END
-
-        -- ASOCIACION
-        -- Asociamos el Pago (via idUnidadFuncional) al Detalle de Expensa (la factura)
         
         UPDATE p
         SET p.idDetalleExpensa = de.idDetalleExpensa
         FROM consorcio.pago p
-        JOIN #PagosMapeados pm ON p.idPago = pm.idPago -- Mapeo la UF desde el pago
-        JOIN consorcio.detalle_expensa de ON pm.idUnidadFuncional = de.idUnidadFuncional -- Condicion: misma UF
-        WHERE de.idExpensa = @idExpensaAConciliar; -- Condicion: Factura de la Expensa correcta (Ej: Abril)
+        JOIN #PagosMapeados pm ON p.idPago = pm.idPago
+        JOIN consorcio.detalle_expensa de ON pm.idUnidadFuncional = de.idUnidadFuncional
+        WHERE de.idExpensa = @idExpensaAConciliar;
 
         DECLARE @PagosConsumidos INT = @@ROWCOUNT;
         
         COMMIT TRANSACTION;
         
-        -- Limpieza
         IF OBJECT_ID('tempdb..#PagosMapeados') IS NOT NULL DROP TABLE #PagosMapeados;
         
         PRINT 'Asociación de Pagos completada. Total de pagos consumidos: ' + CAST(@PagosConsumidos AS VARCHAR(10));
@@ -1856,7 +1849,7 @@ BEGIN
             PRINT 'INFO: Índice ' + @IndexName + ' eliminado de consorcio.pago.';
         END
         
-        -- CORRECCIÓN 1: Eliminación del índice 'idx_persona_salida'
+        -- Eliminación del índice 'idx_persona_salida'
         SET @IndexName = N'idx_persona_salida';
         IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = @IndexName AND object_id = OBJECT_ID(N'consorcio.persona'))
         BEGIN
@@ -1931,7 +1924,6 @@ BEGIN
         DECLARE @TableName NVARCHAR(128);
         DECLARE @IdColumnName NVARCHAR(128);
 
-        -- Tabla: unidad_funcional
         SET @TableName = N'consorcio.unidad_funcional';
         SET @IdColumnName = N'idUnidadFuncional';
 
@@ -2000,11 +1992,9 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        -- Manejo de Errores
         IF @@TRANCOUNT > 0
             ROLLBACK TRANSACTION;
             
-        -- Lanzar el error para que la aplicación lo detecte
         THROW; 
 
     END CATCH

@@ -195,7 +195,7 @@ CREATE USER user_alan_sys FOR LOGIN login_alan_sys WITH DEFAULT_SCHEMA = consorc
 ALTER ROLE [Sistemas] ADD MEMBER user_alan_sys;
 GO
 
--- BRUNO (Tu ejemplo ya estaba correcto)
+-- BRUNO
 CREATE LOGIN login_bruno_sys WITH
     PASSWORD = 'ñG7$Qw!5Xp2#',
     CHECK_POLICY = ON;

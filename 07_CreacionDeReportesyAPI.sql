@@ -41,7 +41,6 @@ BEGIN
     SET NOCOUNT ON;
 
     BEGIN TRY
-        --Prorratear cada pago individual
         WITH PagosProrrateados AS (
             SELECT
                 p.fecha,
@@ -306,7 +305,6 @@ BEGIN
     ORDER BY TipoIngreso;
     ';
 
-    -- ejecutar la consulta
     EXEC sp_executesql @SQL,
         N'@idConsorcioParam INT, @anioParam INT, @mesInicioParam INT, @mesFinParam INT',
         @idConsorcioParam = @idConsorcio,
