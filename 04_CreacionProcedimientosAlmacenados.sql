@@ -1205,7 +1205,7 @@ BEGIN
     BEGIN TRANSACTION;
 
     BEGIN TRY
-        --Normalización y Conversión de Periodo
+        --Conversion de Periodo
         SET @periodo_norm = LOWER(LTRIM(RTRIM(@periodo)));
         IF @fechaEmision IS NULL SET @fechaEmision = GETDATE();
 
@@ -1349,8 +1349,6 @@ BEGIN
   	BEGIN CATCH
   	  	IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
   	  	DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE(), @ErrNo INT = ERROR_NUMBER();
-content:
-source:
   	  	RAISERROR('Error al generar facturas (Err %d): %s', 16, 1, @ErrNo, @ErrMsg);
   	  	RETURN -100;
   	END CATCH
