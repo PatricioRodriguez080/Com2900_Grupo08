@@ -378,7 +378,7 @@ GO
 CREATE OR ALTER PROCEDURE consorcio.sp_insertarUnidadFuncional
 (
     @idConsorcio INT,
-    @cuentaOrigen VARCHAR(22),
+    @cuentaOrigen CHAR(22),
     @numeroUnidadFuncional INT,
     @piso CHAR(2),
     @departamento CHAR(1),
@@ -472,7 +472,7 @@ CREATE OR ALTER PROCEDURE consorcio.sp_modificarUnidadFuncional
 (
     @idUnidadFuncional INT,
     @idConsorcio INT = NULL,
-    @cuentaOrigen VARCHAR(22) = NULL,
+    @cuentaOrigen CHAR(22) = NULL,
     @numeroUnidadFuncional INT = NULL,
     @piso CHAR(2) = NULL,
     @coeficiente DECIMAL(5,2) = NULL,
