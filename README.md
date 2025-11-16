@@ -41,3 +41,10 @@ Se utiliza para la **carga de archivos** mediante los **Stored Procedures (SP)**
 El SQL Dinámico también se aplica en el **SP de seguridad** para el proceso de **cifrado de datos sensibles**.
 
 * Su uso permite evitar que la **clave de encriptamiento** quede registrada en **posibles logs** del sistema o del servidor, aumentando así la seguridad al manejar la clave de manera transitoria y construida dinámicamente en memoria.
+
+# **Consumo de API Externa (Argentina Datos)**
+
+El proyecto también integra la API pública **[ArgentinaDatos](https://argentinadatos.com/)** para obtener información actualizada de:
+
+* **Cotización del dólar**, utilizada en reportes.
+* **Días feriados nacionales**, necesarios para la generacion de expensas con fechas ajustadas según el calendario oficial.
