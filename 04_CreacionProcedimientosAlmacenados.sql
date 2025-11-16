@@ -1198,7 +1198,7 @@ BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
 
-    -- Declaración de tasas de interés y variables
+    -- tasas de intereses
     DECLARE @TasaMoraMenor DECIMAL(5,2) = 0.02; -- 2%
     DECLARE @TasaMoraMayor DECIMAL(5,2) = 0.05; -- 5%
     DECLARE @mes INT;
@@ -1207,7 +1207,7 @@ BEGIN
     BEGIN TRANSACTION;
 
     BEGIN TRY
-        --Normalización y Conversión de Periodo
+        --Conversion de Periodo
         SET @periodo_norm = LOWER(LTRIM(RTRIM(@periodo)));
         IF @fechaEmision IS NULL SET @fechaEmision = GETDATE();
 
@@ -1243,8 +1243,8 @@ BEGIN
         IF EXISTS (SELECT 1 FROM consorcio.detalle_expensa WHERE idExpensa = @idExpensa)
       	BEGIN
         	PRINT 'Advertencia: Las facturas para este cierre (idExpensa=' + CAST(@idExpensa AS VARCHAR(10)) + ') ya existen. No se generó nada nuevo.';
-        	COMMIT TRANSACTION; -- Confirmamos la transacción (no hacer nada es un éxito)
-        	RETURN 0; -- Salimos limpiamente
+        	COMMIT TRANSACTION;
+        	RETURN 0;
       	END;
 
         -- Totales de gastos del mes actual
@@ -1351,8 +1351,6 @@ BEGIN
   	BEGIN CATCH
   	  	IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
   	  	DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE(), @ErrNo INT = ERROR_NUMBER();
-content:
-source:
   	  	RAISERROR('Error al generar facturas (Err %d): %s', 16, 1, @ErrNo, @ErrMsg);
   	  	RETURN -100;
   	END CATCH
