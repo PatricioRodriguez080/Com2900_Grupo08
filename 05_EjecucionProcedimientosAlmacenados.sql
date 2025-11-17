@@ -95,28 +95,29 @@ GO
 -- NUMERO: 10
 -- ARCHIVO: -
 -- PROCEDIMIENTO: Generar detalles de expensas de Abril, Mayo y Junio
+-- CONSIDERACIONES: Se hace uso de la API de feriados.
 --------------------------------------------------------------------------------
 -- Abril
-EXEC consorcio.sp_orquestarFlujoParaTodosLosConsorcios 
-    @periodoExpensa = 'abril', 
+EXEC consorcio.sp_generarExpensaConFeriados 
+    @periodoExpensa = 'abril',
     @anioExpensa = 2025,
     @fechaEmision = '2025-04-05',
     @fechaPrimerVenc = '2025-04-10',
     @fechaSegundoVenc = '2025-04-25';
 GO
 
---Mayo
-EXEC consorcio.sp_orquestarFlujoParaTodosLosConsorcios 
-    @periodoExpensa = 'mayo', 
+-- Mayo
+EXEC consorcio.sp_generarExpensaConFeriados 
+    @periodoExpensa = 'mayo',
     @anioExpensa = 2025,
     @fechaEmision = '2025-05-05',
     @fechaPrimerVenc = '2025-05-10',
     @fechaSegundoVenc = '2025-05-25';
 GO
 
---Junio
-EXEC consorcio.sp_orquestarFlujoParaTodosLosConsorcios 
-    @periodoExpensa = 'junio', 
+-- Junio
+EXEC consorcio.sp_generarExpensaConFeriados 
+    @periodoExpensa = 'junio',
     @anioExpensa = 2025,
     @fechaEmision = '2025-06-05',
     @fechaPrimerVenc = '2025-06-10',
@@ -163,7 +164,7 @@ GO
 -- ARCHIVO: -
 -- PROCEDIMIENTO: Generar detalle de expensa de Julio
 --------------------------------------------------------------------------------
-EXEC consorcio.sp_OrquestarFlujoParaTodosLosConsorcios 
+EXEC consorcio.sp_generarExpensaConFeriados 
     @periodoExpensa = 'julio', 
     @anioExpensa = 2025,
     @fechaEmision = '2025-07-05',

@@ -1540,6 +1540,122 @@ BEGIN
 END;
 GO
 
+--------------------------------------------------------------------------------
+-- NUMERO: 11
+-- ARCHIVO: -
+-- PROCEDIMIENTO: Verificacion de dias feriados para emision de expensas
+--------------------------------------------------------------------------------
+-- Configuracion 
+-- Permite interactuar con las APIs
+
+EXEC sp_configure 'show advanced options', 1;
+RECONFIGURE;
+GO
+EXEC sp_configure 'Ole Automation Procedures', 1;
+RECONFIGURE;
+GO
+
+CREATE OR ALTER PROCEDURE consorcio.sp_generarExpensaConFeriados
+(
+    @periodoExpensa VARCHAR(20),
+    @anioExpensa INT,
+    @fechaEmision DATE,
+    @fechaPrimerVenc DATE,
+    @fechaSegundoVenc DATE
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    ----------------------------------------------------
+    -- 1) Llamar API de feriados (Método de Captura en Tabla)
+    ----------------------------------------------------
+    DECLARE @Object INT = NULL;
+    DECLARE @httpStatus INT = NULL;
+    
+    DECLARE @jsonCapture TABLE (JsonData NVARCHAR(MAX));
+    DECLARE @finalJson NVARCHAR(MAX);
+    
+    DECLARE @Url NVARCHAR(300) =
+        'https://api.argentinadatos.com/v1/feriados/' + CAST(@anioExpensa AS NVARCHAR);
+
+    BEGIN TRY
+        EXEC sp_OACreate 'MSXML2.XMLHTTP', @Object OUT;
+        EXEC sp_OAMethod @Object, 'OPEN', NULL, 'GET', @Url, 'FALSE';
+        EXEC sp_OAMethod @Object, 'SEND';
+        
+        EXEC sp_OAGetProperty @Object, 'Status', @httpStatus OUTPUT;
+
+        IF @httpStatus = 200
+        BEGIN
+            INSERT INTO @jsonCapture (JsonData) 
+                EXEC sp_OAGetProperty @Object, 'RESPONSETEXT';
+        END
+        
+    END TRY
+    BEGIN CATCH
+        DECLARE @Err NVARCHAR(MAX) = ERROR_MESSAGE();
+        PRINT 'Error llamando API de feriados: ' + @Err;
+        IF @Object IS NOT NULL EXEC sp_OADestroy @Object;
+        RETURN;
+    END CATCH;
+
+    -- Extraer el JSON de la tabla a la variable final para su procesamiento
+    SELECT @finalJson = JsonData FROM @jsonCapture;
+
+    ----------------------------------------------------
+    -- 2) Pasar JSON a tabla @feriados
+    ----------------------------------------------------
+    DECLARE @feriados TABLE (Fecha DATE);
+
+    INSERT INTO @feriados (Fecha)
+    SELECT fecha
+    FROM OPENJSON(@finalJson)
+    WITH (
+        fecha DATE '$.fecha'
+    );
+
+
+    ----------------------------------------------------
+    -- 3) Ajuste de fechas hábiles
+    ----------------------------------------------------
+    DECLARE @fe DATE = @fechaEmision;
+    DECLARE @fv1 DATE = @fechaPrimerVenc;
+    DECLARE @fv2 DATE = @fechaSegundoVenc;
+
+    WHILE DATENAME(WEEKDAY, @fe) = 'Sunday'
+       OR EXISTS (SELECT 1 FROM @feriados WHERE Fecha = @fe)
+    BEGIN
+        SET @fe = DATEADD(DAY, 1, @fe);
+    END
+
+    WHILE DATENAME(WEEKDAY, @fv1) = 'Sunday'
+       OR EXISTS (SELECT 1 FROM @feriados WHERE Fecha = @fv1)
+    BEGIN
+        SET @fv1 = DATEADD(DAY, 1, @fv1);
+    END
+
+    WHILE DATENAME(WEEKDAY, @fv2) = 'Sunday'
+       OR EXISTS (SELECT 1 FROM @feriados WHERE Fecha = @fv2)
+    BEGIN
+        SET @fv2 = DATEADD(DAY, 1, @fv2);
+    END
+
+
+    ----------------------------------------------------
+    -- 4) Llamar SP maestro con fechas ajustadas
+    ----------------------------------------------------
+    EXEC consorcio.sp_orquestarFlujoParaTodosLosConsorcios
+        @periodoExpensa,
+        @anioExpensa,
+        @fe,
+        @fv1,
+        @fv2;
+
+END
+GO
+
+
 CREATE OR ALTER PROCEDURE consorcio.sp_orquestarFlujoParaTodosLosConsorcios
     @periodoExpensa VARCHAR(12),
     @anioExpensa INT,
