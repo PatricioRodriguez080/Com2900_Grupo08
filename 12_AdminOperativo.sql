@@ -1,3 +1,18 @@
+/*
+================================================================================
+Materia:          Bases de Datos Aplicadas
+Comisión:         01-2900
+Grupo:            G08
+Fecha de Entrega: 04/11/2025
+Integrantes:
+    - Bentancur Suarez, Ismael (45823439)
+    - Rodriguez Arrien, Juan Manuel (44259478)
+    - Rodriguez, Patricio (45683229)
+    - Ruiz, Leonel Emiliano (45537914)
+Enunciado:        "12 - Pruebas Administativos Operativos"
+================================================================================
+*/
+
 ----------------------------------------------------------------------------------------------------------------------------
 ----------------------								                Acciones                                              --
 ----------------------------------------------------------------------------------------------------------------------------
@@ -30,8 +45,8 @@ GO
 -- Resultado Esperado: Reporte generado con éxito
 EXEC consorcio.SP_reporte_4
     @idConsorcio = 1,
-    @FechaInicio = '2025-04-01', -- Fecha de inicio del período a examinar
-    @FechaFin = '2025-06-30';    -- Fecha de fin del período a examinar
+    @FechaInicio = '2025-04-01',
+    @FechaFin = '2025-06-30';
 GO
 
 
