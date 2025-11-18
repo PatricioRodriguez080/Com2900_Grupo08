@@ -23,8 +23,8 @@
     <LogicalFolder Name="Consultas" Type="0" Sorted="true">
       <Items>
         <FileNode Name="00_CreacionBaseDeDatos.sql">
-          <AssociatedConnectionMoniker />
-          <AssociatedConnSrvName />
+          <AssociatedConnectionMoniker>8c91a03d-f9b4-46c0-a305-b5dcc79ff907:DESKTOP-94KEH8U\SQLEXPRESS:True</AssociatedConnectionMoniker>
+          <AssociatedConnSrvName>DESKTOP-94KEH8U\SQLEXPRESS</AssociatedConnSrvName>
           <AssociatedConnUserName />
           <FullPath>00_CreacionBaseDeDatos.sql</FullPath>
         </FileNode>
@@ -58,17 +58,53 @@
           <AssociatedConnUserName />
           <FullPath>05_EjecucionProcedimientosAlmacenados.sql</FullPath>
         </FileNode>
-        <FileNode Name="06_ReportesyAPI.sql">
+        <FileNode Name="06_TestingProcedimientosAlmacenados.sql">
           <AssociatedConnectionMoniker>8c91a03d-f9b4-46c0-a305-b5dcc79ff907:DESKTOP-94KEH8U\SQLEXPRESS:True</AssociatedConnectionMoniker>
           <AssociatedConnSrvName>DESKTOP-94KEH8U\SQLEXPRESS</AssociatedConnSrvName>
           <AssociatedConnUserName />
-          <FullPath>06_ReportesyAPI.sql</FullPath>
+          <FullPath>06_TestingProcedimientosAlmacenados.sql</FullPath>
         </FileNode>
-        <FileNode Name="07_MedidasDeSeguridad.sql">
+        <FileNode Name="07_CreacionDeReportesyAPI.sql">
           <AssociatedConnectionMoniker>8c91a03d-f9b4-46c0-a305-b5dcc79ff907:DESKTOP-94KEH8U\SQLEXPRESS:True</AssociatedConnectionMoniker>
           <AssociatedConnSrvName>DESKTOP-94KEH8U\SQLEXPRESS</AssociatedConnSrvName>
           <AssociatedConnUserName />
-          <FullPath>07_MedidasDeSeguridad.sql</FullPath>
+          <FullPath>07_CreacionDeReportesyAPI.sql</FullPath>
+        </FileNode>
+        <FileNode Name="08_EjecucionDeReportes.sql">
+          <AssociatedConnectionMoniker>8c91a03d-f9b4-46c0-a305-b5dcc79ff907:DESKTOP-94KEH8U\SQLEXPRESS:True</AssociatedConnectionMoniker>
+          <AssociatedConnSrvName>DESKTOP-94KEH8U\SQLEXPRESS</AssociatedConnSrvName>
+          <AssociatedConnUserName />
+          <FullPath>08_EjecucionDeReportes.sql</FullPath>
+        </FileNode>
+        <FileNode Name="09_MedidasDeSeguridad.sql">
+          <AssociatedConnectionMoniker>8c91a03d-f9b4-46c0-a305-b5dcc79ff907:DESKTOP-94KEH8U\SQLEXPRESS:True</AssociatedConnectionMoniker>
+          <AssociatedConnSrvName>DESKTOP-94KEH8U\SQLEXPRESS</AssociatedConnSrvName>
+          <AssociatedConnUserName />
+          <FullPath>09_MedidasDeSeguridad.sql</FullPath>
+        </FileNode>
+        <FileNode Name="10_AdminGeneral.sql">
+          <AssociatedConnectionMoniker>8c91a03d-f9b4-46c0-a305-b5dcc79ff907:DESKTOP-94KEH8U\SQLEXPRESS:True</AssociatedConnectionMoniker>
+          <AssociatedConnSrvName>DESKTOP-94KEH8U\SQLEXPRESS</AssociatedConnSrvName>
+          <AssociatedConnUserName />
+          <FullPath>10_AdminGeneral.sql</FullPath>
+        </FileNode>
+        <FileNode Name="11_AdminBancario.sql">
+          <AssociatedConnectionMoniker>8c91a03d-f9b4-46c0-a305-b5dcc79ff907:DESKTOP-94KEH8U\SQLEXPRESS:True</AssociatedConnectionMoniker>
+          <AssociatedConnSrvName>DESKTOP-94KEH8U\SQLEXPRESS</AssociatedConnSrvName>
+          <AssociatedConnUserName />
+          <FullPath>11_AdminBancario.sql</FullPath>
+        </FileNode>
+        <FileNode Name="12_AdminOperativo.sql">
+          <AssociatedConnectionMoniker>8c91a03d-f9b4-46c0-a305-b5dcc79ff907:DESKTOP-94KEH8U\SQLEXPRESS:True</AssociatedConnectionMoniker>
+          <AssociatedConnSrvName>DESKTOP-94KEH8U\SQLEXPRESS</AssociatedConnSrvName>
+          <AssociatedConnUserName />
+          <FullPath>12_AdminOperativo.sql</FullPath>
+        </FileNode>
+        <FileNode Name="13_Sistemas.sql">
+          <AssociatedConnectionMoniker>8c91a03d-f9b4-46c0-a305-b5dcc79ff907:DESKTOP-94KEH8U\SQLEXPRESS:True</AssociatedConnectionMoniker>
+          <AssociatedConnSrvName>DESKTOP-94KEH8U\SQLEXPRESS</AssociatedConnSrvName>
+          <AssociatedConnUserName />
+          <FullPath>13_Sistemas.sql</FullPath>
         </FileNode>
       </Items>
     </LogicalFolder>

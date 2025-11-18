@@ -1625,11 +1625,11 @@ GO
 
 CREATE OR ALTER PROCEDURE consorcio.sp_generarExpensaConFeriados
 (
-    @periodoExpensa VARCHAR(20),
-    @anioExpensa INT,
-    @fechaEmision DATE,
-    @fechaPrimerVenc DATE,
-    @fechaSegundoVenc DATE
+    @periodoExpensa    VARCHAR(20),
+    @anioExpensa       INT,
+    @fechaEmision      DATE,
+    @fechaPrimerVenc   DATE,
+    @fechaSegundoVenc  DATE
 )
 AS
 BEGIN
@@ -1668,8 +1668,8 @@ BEGIN
         RETURN;
     END CATCH;
 
-    -- Extraer el JSON de la tabla a la variable final para su procesamiento
     SELECT @finalJson = JsonData FROM @jsonCapture;
+
 
     ----------------------------------------------------
     -- 2) Pasar JSON a tabla @feriados
@@ -1685,30 +1685,56 @@ BEGIN
 
 
     ----------------------------------------------------
-    -- 3) Ajuste de fechas hábiles
+    -- 3) Calcular el 5° día hábil del mes
     ----------------------------------------------------
-    DECLARE @fe DATE = @fechaEmision;
-    DECLARE @fv1 DATE = @fechaPrimerVenc;
-    DECLARE @fv2 DATE = @fechaSegundoVenc;
+    DECLARE @primerDiaMes DATE = DATEFROMPARTS(@anioExpensa, MONTH(@fechaEmision), 1);
 
-    WHILE DATENAME(WEEKDAY, @fe) = 'Sunday'
+    DECLARE @contador INT = 0;
+    DECLARE @diaActual DATE = @primerDiaMes;
+
+    WHILE @contador < 5
+    BEGIN
+        -- Día hábil = no sábado, no domingo, no feriado
+        IF DATENAME(WEEKDAY, @diaActual) NOT IN ('Saturday','Sunday')
+           AND NOT EXISTS (SELECT 1 FROM @feriados WHERE Fecha = @diaActual)
+        BEGIN
+            SET @contador = @contador + 1;
+        END
+
+        IF @contador < 5
+            SET @diaActual = DATEADD(DAY, 1, @diaActual);
+    END
+
+    DECLARE @fe DATE = @diaActual;
+
+
+    ----------------------------------------------------
+    -- 3b) Ajuste adicional (doble seguridad)
+    ----------------------------------------------------
+    WHILE DATENAME(WEEKDAY, @fe) IN ('Saturday','Sunday')
        OR EXISTS (SELECT 1 FROM @feriados WHERE Fecha = @fe)
     BEGIN
         SET @fe = DATEADD(DAY, 1, @fe);
     END
 
-    WHILE DATENAME(WEEKDAY, @fv1) = 'Sunday'
+
+    ----------------------------------------------------
+    -- 3c) Ajustar vencimientos (manteniendo tu lógica)
+    ----------------------------------------------------
+    DECLARE @fv1 DATE = @fechaPrimerVenc;
+    DECLARE @fv2 DATE = @fechaSegundoVenc;
+
+    WHILE DATENAME(WEEKDAY, @fv1) IN ('Saturday','Sunday')
        OR EXISTS (SELECT 1 FROM @feriados WHERE Fecha = @fv1)
     BEGIN
         SET @fv1 = DATEADD(DAY, 1, @fv1);
     END
 
-    WHILE DATENAME(WEEKDAY, @fv2) = 'Sunday'
+    WHILE DATENAME(WEEKDAY, @fv2) IN ('Saturday','Sunday')
        OR EXISTS (SELECT 1 FROM @feriados WHERE Fecha = @fv2)
     BEGIN
         SET @fv2 = DATEADD(DAY, 1, @fv2);
     END
-
 
     ----------------------------------------------------
     -- 4) Llamar SP maestro con fechas ajustadas

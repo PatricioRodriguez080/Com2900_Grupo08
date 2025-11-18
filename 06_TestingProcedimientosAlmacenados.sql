@@ -185,6 +185,6 @@ LEFT JOIN (
         idUnidadFuncional
 ) AS C ON UF.idUnidadFuncional = C.idUnidadFuncional
 WHERE
-    DE.fechaEmision = '2025-07-05' 
+    DE.fechaEmision = '2025-07-07' 
 ORDER BY
     UF.idUnidadFuncional;
