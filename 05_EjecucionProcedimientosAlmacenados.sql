@@ -12,7 +12,11 @@ Integrantes:
 Enunciado:        "05 - Ejecución de Procedimientos Almacenados"
 ================================================================================
 */
--- Todos los archivos utilizados se encontrarán en "C:\Archivos para el TP" ----
+
+------------------------      CONSIDERACIÓN       --------------------------------
+-- Todos los archivos utilizados se encontrarán en "C:\Archivos para el TP"     --
+-- de lo contrario, deberá modificar los parámetros de cada ejecución de los SP --
+----------------------------------------------------------------------------------
 
 USE Com2900G08;
 GO
