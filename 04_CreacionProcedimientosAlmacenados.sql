@@ -1555,6 +1555,74 @@ EXEC sp_configure 'Ole Automation Procedures', 1;
 RECONFIGURE;
 GO
 
+CREATE OR ALTER PROCEDURE consorcio.sp_orquestarFlujoParaTodosLosConsorcios
+    @periodoExpensa VARCHAR(12),
+    @anioExpensa INT,
+    @fechaEmision DATE,
+    @fechaPrimerVenc DATE,
+    @fechaSegundoVenc DATE = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    PRINT N'================================================================================';
+    PRINT N'INICIANDO ORQUESTADOR GENERAL PARA: ' + @periodoExpensa + ' ' + CAST(@anioExpensa AS VARCHAR);
+    PRINT N'================================================================================';
+
+    IF OBJECT_ID('tempdb..#ConsorciosAProcesar') IS NOT NULL DROP TABLE #ConsorciosAProcesar;
+    
+    SELECT 
+        idConsorcio,
+        nombre,
+        ROW_NUMBER() OVER (ORDER BY idConsorcio) AS rn
+    INTO #ConsorciosAProcesar
+    FROM consorcio.consorcio
+    WHERE fechaBaja IS NULL;
+
+    DECLARE @i INT = 1;
+    DECLARE @max INT = (SELECT COUNT(*) FROM #ConsorciosAProcesar);
+    DECLARE @idConsorcioActual INT;
+    DECLARE @nombreConsorcio VARCHAR(50);
+    DECLARE @Msg NVARCHAR(500);
+
+    -- 3. Bucle por cada consorcio
+    WHILE @i <= @max
+    BEGIN
+        SELECT 
+            @idConsorcioActual = idConsorcio,
+            @nombreConsorcio = nombre
+        FROM #ConsorciosAProcesar
+        WHERE rn = @i;
+
+        SET @Msg = N'--- Procesando Consorcio ' + CAST(@idConsorcioActual AS VARCHAR) + ' (' + @nombreConsorcio + ') ---';
+        PRINT @Msg;
+
+        BEGIN TRY
+            EXEC consorcio.sp_orquestarFlujoFacturacionMensual 
+                @idConsorcio = @idConsorcioActual,
+                @periodoExpensa = @periodoExpensa, 
+                @anioExpensa = @anioExpensa, 
+                @fechaEmision = @fechaEmision,
+                @fechaPrimerVenc = @fechaPrimerVenc, 
+                @fechaSegundoVenc = @fechaSegundoVenc;
+        END TRY
+        BEGIN CATCH
+            -- Si un consorcio falla, lo informa y continua
+            SET @Msg = N'ERROR: Falló el procesamiento del Consorcio ' + CAST(@idConsorcioActual AS VARCHAR) + '. Error: ' + ERROR_MESSAGE();
+            PRINT @Msg;
+        END CATCH
+
+        SET @i = @i + 1;
+    END
+
+    DROP TABLE #ConsorciosAProcesar;
+    PRINT N'================================================================================';
+    PRINT N'ORQUESTADOR GENERAL FINALIZADO.';
+    PRINT N'================================================================================';
+END;
+GO
+
 CREATE OR ALTER PROCEDURE consorcio.sp_generarExpensaConFeriados
 (
     @periodoExpensa VARCHAR(20),
@@ -1655,77 +1723,8 @@ BEGIN
 END
 GO
 
-
-CREATE OR ALTER PROCEDURE consorcio.sp_orquestarFlujoParaTodosLosConsorcios
-    @periodoExpensa VARCHAR(12),
-    @anioExpensa INT,
-    @fechaEmision DATE,
-    @fechaPrimerVenc DATE,
-    @fechaSegundoVenc DATE = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    PRINT N'================================================================================';
-    PRINT N'INICIANDO ORQUESTADOR GENERAL PARA: ' + @periodoExpensa + ' ' + CAST(@anioExpensa AS VARCHAR);
-    PRINT N'================================================================================';
-
-    IF OBJECT_ID('tempdb..#ConsorciosAProcesar') IS NOT NULL DROP TABLE #ConsorciosAProcesar;
-    
-    SELECT 
-        idConsorcio,
-        nombre,
-        ROW_NUMBER() OVER (ORDER BY idConsorcio) AS rn
-    INTO #ConsorciosAProcesar
-    FROM consorcio.consorcio
-    WHERE fechaBaja IS NULL;
-
-    DECLARE @i INT = 1;
-    DECLARE @max INT = (SELECT COUNT(*) FROM #ConsorciosAProcesar);
-    DECLARE @idConsorcioActual INT;
-    DECLARE @nombreConsorcio VARCHAR(50);
-    DECLARE @Msg NVARCHAR(500);
-
-    -- 3. Bucle por cada consorcio
-    WHILE @i <= @max
-    BEGIN
-        SELECT 
-            @idConsorcioActual = idConsorcio,
-            @nombreConsorcio = nombre
-        FROM #ConsorciosAProcesar
-        WHERE rn = @i;
-
-        SET @Msg = N'--- Procesando Consorcio ' + CAST(@idConsorcioActual AS VARCHAR) + ' (' + @nombreConsorcio + ') ---';
-        PRINT @Msg;
-
-        BEGIN TRY
-            EXEC consorcio.sp_orquestarFlujoFacturacionMensual 
-                @idConsorcio = @idConsorcioActual,
-                @periodoExpensa = @periodoExpensa, 
-                @anioExpensa = @anioExpensa, 
-                @fechaEmision = @fechaEmision,
-                @fechaPrimerVenc = @fechaPrimerVenc, 
-                @fechaSegundoVenc = @fechaSegundoVenc;
-        END TRY
-        BEGIN CATCH
-            -- Si un consorcio falla, lo informa y continua
-            SET @Msg = N'ERROR: Falló el procesamiento del Consorcio ' + CAST(@idConsorcioActual AS VARCHAR) + '. Error: ' + ERROR_MESSAGE();
-            PRINT @Msg;
-        END CATCH
-
-        SET @i = @i + 1;
-    END
-
-    DROP TABLE #ConsorciosAProcesar;
-    PRINT N'================================================================================';
-    PRINT N'ORQUESTADOR GENERAL FINALIZADO.';
-    PRINT N'================================================================================';
-END;
-GO
-
 --------------------------------------------------------------------------------
--- NÚMERO: 11
+-- NÚMERO: 12
 -- ARCHIVO: -
 -- PROCEDIMIENTO: Inserción de datos a la tabla estado_financiero
 --------------------------------------------------------------------------------
@@ -1923,7 +1922,7 @@ END;
 GO
 
 --------------------------------------------------------------------------------
--- NUMERO: 12
+-- NUMERO: 13
 -- ARCHIVO: -
 -- PROCEDIMIENTO: Modificacion de tablas para cifrado de datos sensibles
 --------------------------------------------------------------------------------
@@ -2116,7 +2115,7 @@ END
 GO
 
 --------------------------------------------------------------------------------
--- NUMERO: 13
+-- NUMERO: 14
 -- ARCHIVO: -
 -- PROCEDIMIENTO: Modificacion de tablas para descifrado de datos sensibles
 --------------------------------------------------------------------------------
