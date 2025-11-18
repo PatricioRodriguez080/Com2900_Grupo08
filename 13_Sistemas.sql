@@ -23,5 +23,3 @@ GO
 -- PRUEBA DE FALLO: Intentar leer la tabla gasto
 -- Resultado Esperado: ERROR (Msg 229: The SELECT permission was denied...)
 SELECT * FROM gasto;
-
-CORRECTO

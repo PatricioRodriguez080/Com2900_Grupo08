@@ -8,6 +8,9 @@
 | Leonel Emiliano Ruiz            | [@LeoRuizz](https://github.com/LeoRuizz) |
 
 
+# Consideracion
+
+Todos los archivos utilizados se deben encontrar en `"C:\Archivos para el TP"`. En caso contrario se debera modificar la ruta en los parametros en la ejecucion de cada SP
 
 # Norma de Nomenclatura del Proyecto
 
