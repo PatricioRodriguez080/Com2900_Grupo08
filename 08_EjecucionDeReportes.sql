@@ -52,6 +52,7 @@ GO
 -- Obtener los 5 (cinco) meses de mayores gastos y los 5 (cinco) de mayores ingresos
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_reporte_4
+    @idConsorcio = 1,
     @FechaInicio = '2025-04-01',
     @FechaFin = '2025-06-30';
 GO
@@ -61,9 +62,9 @@ GO
 -- Obtenga los 3 (tres) propietarios con mayor morosidad. Presente información de contacto y DNI de los propietarios 
 -- para que la administración los pueda contactar o remitir el trámite al estudio jurídico.
 --------------------------------------------------------------------------------
-EXEC consorcio.SP_reporte_5;
+EXEC consorcio.SP_reporte_5
+    @idConsorcio = 5
 GO
-
 
 --------------------------------------------------------------------------------
 -- REPORTE 6
@@ -71,4 +72,7 @@ GO
 -- pasan entre un pago y el siguiente, para el conjunto examinado
 --------------------------------------------------------------------------------
 EXEC consorcio.SP_reporte_6
-    @idConsorcio = 1
+    @idConsorcio = 1,
+    @FechaDesde = '2025-04-01',
+    @FechaHasta = '2025-04-30';
+GO

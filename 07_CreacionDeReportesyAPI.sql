@@ -320,6 +320,7 @@ GO
 -- Obtener los 5 (cinco) meses de mayores gastos y los 5 (cinco) de mayores ingresos
 --------------------------------------------------------------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_reporte_4
+    @idConsorcio INT,
     @FechaInicio DATE,
     @FechaFin DATE
 AS
@@ -377,19 +378,23 @@ BEGIN
         TotalGastos_ARS DECIMAL(18, 2)
     );
 
-    INSERT INTO @TopIngresos (Anio, Mes, TotalIngresos_ARS)
+    INSERT INTO @TopGastos (Anio, Mes, TotalGastos_ARS)
     SELECT TOP 5
-        YEAR(p.fecha),
-        CASE MONTH(p.fecha)
-            WHEN 1 THEN 'enero' WHEN 2 THEN 'febrero' WHEN 3 THEN 'marzo' WHEN 4 THEN 'abril' 
-            WHEN 5 THEN 'mayo' WHEN 6 THEN 'junio' WHEN 7 THEN 'julio' WHEN 8 THEN 'agosto' 
-            WHEN 9 THEN 'septiembre' WHEN 10 THEN 'octubre' WHEN 11 THEN 'noviembre' WHEN 12 THEN 'diciembre' 
-        END,
-        SUM(p.importe)
-    FROM consorcio.pago AS p JOIN consorcio.unidad_funcional AS uf ON p.cuentaOrigen = uf.cuentaOrigen
-    WHERE p.fecha BETWEEN @FechaInicio AND @FechaFin
-    GROUP BY YEAR(p.fecha), MONTH(p.fecha)
-    ORDER BY SUM(p.importe) DESC;
+        e.anio,
+        e.periodo,
+        SUM(g.subTotalOrdinarios + g.subTotalExtraOrd)
+    FROM consorcio.gasto AS g 
+    JOIN consorcio.expensa AS e ON g.idExpensa = e.idExpensa
+    WHERE 
+        e.idConsorcio = @idConsorcio
+        AND DATEFROMPARTS(e.anio, 
+        CASE e.periodo
+            WHEN 'enero' THEN 1 WHEN 'febrero' THEN 2 WHEN 'marzo' THEN 3 WHEN 'abril' THEN 4 
+            WHEN 'mayo' THEN 5 WHEN 'junio' THEN 6 WHEN 'julio' THEN 7 WHEN 'agosto' THEN 8 
+            WHEN 'septiembre' THEN 9 WHEN 'octubre' THEN 10 WHEN 'noviembre' THEN 11 WHEN 'diciembre' THEN 12 
+        END, 1) BETWEEN @FechaInicio AND @FechaFin
+    GROUP BY e.anio, e.periodo
+    ORDER BY SUM(g.subTotalOrdinarios + g.subTotalExtraOrd) DESC;
 
     INSERT INTO @TopGastos (Anio, Mes, TotalGastos_ARS)
     SELECT TOP 5
@@ -446,12 +451,16 @@ GO
 
 --------------------------------------------------------------------------------
 -- REPORTE 5
--- Obtenga los 3 (tres) propietarios con mayor morosidad. Presente información de contacto y DNI de los propietarios 
--- para que la administración los pueda contactar o remitir el trámite al estudio jurídico.
+-- Obtenga los 3 (tres) propietarios con mayor morosidad. 
+-- Filtros: Consorcio (Opcional) y Piso (Opcional).
 --------------------------------------------------------------------------------
 CREATE OR ALTER PROCEDURE consorcio.SP_reporte_5
+    @idConsorcio INT = NULL,
+    @Piso INT = NULL                       
 AS
 BEGIN
+    SET NOCOUNT ON;
+
     SELECT TOP 3
         p.nombre,
         p.apellido,
@@ -467,8 +476,14 @@ BEGIN
         consorcio.unidad_funcional uf ON puf.idUnidadFuncional = uf.idUnidadFuncional
     JOIN
         consorcio.detalle_expensa de ON uf.idUnidadFuncional = de.idUnidadFuncional
+    JOIN
+        consorcio.expensa e ON de.idExpensa = e.idExpensa 
     WHERE
-        puf.rol = 'propietario'
+        puf.rol = 'propietario' 
+        AND de.deuda > 0
+        AND (@idConsorcio IS NULL OR e.idConsorcio = @idConsorcio) 
+        AND (@Piso IS NULL OR uf.piso = @Piso)
+        
     GROUP BY
         p.idPersona,
         p.nombre,
